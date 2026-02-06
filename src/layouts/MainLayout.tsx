@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { NavLink, Outlet, useNavigate } from 'react-router-dom'
+import { NavLink, Outlet } from 'react-router-dom'
+import { UserButton } from '@clerk/clerk-react'
 import {
   LayoutDashboard,
   CalendarDays,
@@ -11,12 +12,15 @@ import {
   Contact,
   ClipboardPlus,
   FlaskConical,
+  Package,
+  ClipboardCheck,
+  Settings,
   Menu,
   X,
   Sun,
   Moon,
-  LogOut,
 } from 'lucide-react'
+import { Toaster } from 'sonner'
 import { useTheme } from '../context/ThemeContext'
 
 const navItems = [
@@ -29,13 +33,15 @@ const navItems = [
   { to: '/reportes-rips', label: 'Reportes RIPS', icon: FileBarChart },
   { to: '/recetas', label: 'Recetas', icon: ClipboardPlus },
   { to: '/laboratorios', label: 'Laboratorios', icon: FlaskConical },
+  { to: '/inventario', label: 'Inventario', icon: Package },
+  { to: '/tareas', label: 'Tareas', icon: ClipboardCheck },
   { to: '/directorio', label: 'Directorio', icon: Contact },
+  { to: '/configuracion', label: 'Configuración', icon: Settings },
 ]
 
 export default function MainLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const { theme, toggleTheme } = useTheme()
-  const navigate = useNavigate()
 
   return (
     <div className="flex h-screen overflow-hidden bg-clinical-white dark:bg-omega-abyss">
@@ -92,8 +98,8 @@ export default function MainLayout() {
           ))}
         </nav>
 
-        {/* Theme toggle + Logout */}
-        <div className="space-y-1 px-3 pb-4">
+        {/* Theme toggle + User */}
+        <div className="space-y-3 px-3 pb-4">
           <button
             onClick={toggleTheme}
             className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-clinical-white/70 transition-colors hover:bg-clinical-white/10 hover:text-clinical-white"
@@ -101,13 +107,17 @@ export default function MainLayout() {
             {theme === 'dark' ? <Sun size={20} strokeWidth={1.75} /> : <Moon size={20} strokeWidth={1.75} />}
             {theme === 'dark' ? 'Modo Claro' : 'Modo Oscuro'}
           </button>
-          <button
-            onClick={() => navigate('/')}
-            className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-alert-red/70 transition-colors hover:bg-alert-red/10 hover:text-alert-red"
-          >
-            <LogOut size={20} strokeWidth={1.75} />
-            Cerrar Sesión
-          </button>
+          <div className="flex items-center gap-3 rounded-lg px-3 py-2">
+            <UserButton
+              afterSignOutUrl="/"
+              appearance={{
+                elements: {
+                  avatarBox: 'h-8 w-8',
+                },
+              }}
+            />
+            <span className="text-sm font-medium text-clinical-white/70">Mi Cuenta</span>
+          </div>
         </div>
       </aside>
 
@@ -119,13 +129,18 @@ export default function MainLayout() {
             <Menu size={22} className="text-omega-dark dark:text-clinical-white" />
           </button>
           <img src="/beta-logo.png" alt="Beta Clinic" className="ml-3 h-7 w-auto object-contain" />
-          <div className="ml-auto flex items-center gap-2">
+          <div className="ml-auto flex items-center gap-3">
             <button onClick={toggleTheme} className="text-omega-dark/60 dark:text-clinical-white/60">
               {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
             </button>
-            <button onClick={() => navigate('/')} className="text-alert-red/60 transition-colors hover:text-alert-red">
-              <LogOut size={18} />
-            </button>
+            <UserButton
+              afterSignOutUrl="/"
+              appearance={{
+                elements: {
+                  avatarBox: 'h-7 w-7',
+                },
+              }}
+            />
           </div>
         </header>
 
@@ -133,6 +148,22 @@ export default function MainLayout() {
         <main className="flex-1 overflow-y-auto bg-clinical-white p-6 dark:bg-omega-abyss">
           <Outlet />
         </main>
+
+        <Toaster
+          theme="dark"
+          position="top-right"
+          toastOptions={{
+            style: {
+              background: '#1A1030',
+              border: '1px solid rgba(255,255,255,0.1)',
+              color: '#F8F9FA',
+            },
+            classNames: {
+              success: '[&>[data-icon]]:text-[#7FFFD4]',
+              error: '[&>[data-icon]]:text-[#E53935]',
+            },
+          }}
+        />
       </div>
     </div>
   )

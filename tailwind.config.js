@@ -11,7 +11,7 @@ export default {
         'omega-dark': '#4A148C',
         'omega-abyss': '#0B0613',
         'omega-surface': '#1A1030',
-        'beta-mint': '#7FFFD4',
+        'beta-mint': 'var(--color-accent, #7FFFD4)',
         'clinical-white': '#F8F9FA',
         'alert-red': '#E53935',
       },

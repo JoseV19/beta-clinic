@@ -1,14 +1,10 @@
-import { useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
+import { useUser } from '@clerk/clerk-react'
+import { JitsiMeeting } from '@jitsi/react-sdk'
 import {
-  Video,
-  VideoOff,
-  Mic,
-  MicOff,
-  PhoneOff,
   Phone,
-  Camera,
+  PhoneOff,
   Clock,
-  User,
   Save,
 } from 'lucide-react'
 
@@ -43,12 +39,19 @@ const patientInfo = {
 /* ── Component ─────────────────────────────────────────── */
 
 export default function Telemedicina() {
+  const { user } = useUser()
   const [callState, setCallState] = useState<CallState>('idle')
-  const [micOn, setMicOn] = useState(true)
-  const [camOn, setCamOn] = useState(true)
   const [notes, setNotes] = useState('')
   const [notesSaved, setNotesSaved] = useState(false)
   const [selectedPatient, setSelectedPatient] = useState<WaitingPatient | null>(null)
+
+  const roomName = useMemo(
+    () => `BetaClinic-Consultation-${Date.now()}`,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [selectedPatient],
+  )
+
+  const doctorName = user?.fullName ?? user?.firstName ?? 'Doctor'
 
   function handleStartCall(patient: WaitingPatient) {
     setSelectedPatient(patient)
@@ -60,13 +63,18 @@ export default function Telemedicina() {
   function handleEndCall() {
     setCallState('idle')
     setSelectedPatient(null)
-    setMicOn(true)
-    setCamOn(true)
   }
 
   function handleSaveNotes() {
     setNotesSaved(true)
   }
+
+  const handleIFrameRef = useCallback((node: HTMLDivElement) => {
+    if (node) {
+      node.style.width = '100%'
+      node.style.height = '100%'
+    }
+  }, [])
 
   /* ── Idle state: waiting room ────────────────────────── */
 
@@ -138,56 +146,43 @@ export default function Telemedicina() {
   return (
     <div className="flex h-full flex-col gap-4 lg:flex-row">
       {/* Left — Video area (70%) */}
-      <div className="flex flex-col lg:w-[70%]">
-        <div className="relative flex flex-1 items-center justify-center rounded-xl bg-omega-dark">
-          {/* Simulated video */}
-          <div className="flex flex-col items-center gap-3 text-clinical-white/30">
-            <Camera size={64} strokeWidth={1} />
-            <span className="text-sm font-medium">
-              {camOn ? `Videollamada con ${selectedPatient?.nombre}` : 'Cámara desactivada'}
-            </span>
+      <div className="flex min-h-[400px] flex-col lg:w-[70%]">
+        <div className="relative flex flex-1 flex-col overflow-hidden rounded-xl bg-omega-dark">
+          {/* Jitsi Meeting */}
+          <div className="flex-1">
+            <JitsiMeeting
+              domain="meet.jit.si"
+              roomName={roomName}
+              getIFrameRef={handleIFrameRef}
+              userInfo={{ displayName: doctorName, email: user?.primaryEmailAddress?.emailAddress ?? '' }}
+              configOverwrite={{
+                startAudioOnly: true,
+                prejoinPageEnabled: false,
+                disableModeratorIndicator: true,
+                startWithAudioMuted: false,
+                startWithVideoMuted: false,
+              }}
+              interfaceConfigOverwrite={{
+                SHOW_JITSI_WATERMARK: false,
+                SHOW_WATERMARK_FOR_GUESTS: false,
+                SHOW_BRAND_WATERMARK: false,
+                TOOLBAR_BUTTONS: [
+                  'microphone', 'camera', 'desktop', 'chat',
+                  'raisehand', 'tileview', 'fullscreen',
+                ],
+              }}
+              onReadyToClose={handleEndCall}
+            />
           </div>
 
-          {/* Call timer badge */}
-          <div className="absolute top-4 left-4 flex items-center gap-1.5 rounded-full bg-black/40 px-3 py-1 text-xs font-medium text-clinical-white backdrop-blur-sm">
-            <span className="h-2 w-2 animate-pulse rounded-full bg-alert-red" />
-            En llamada
-          </div>
-
-          {/* Patient mini-cam placeholder */}
-          <div className="absolute bottom-4 right-4 flex h-24 w-32 items-center justify-center rounded-lg bg-black/50 text-clinical-white/40 backdrop-blur-sm">
-            <User size={28} />
-          </div>
-
-          {/* Call controls */}
-          <div className="absolute bottom-4 left-1/2 flex -translate-x-1/2 items-center gap-3">
-            <button
-              onClick={() => setMicOn((v) => !v)}
-              className={`rounded-full p-3 transition-colors ${
-                micOn
-                  ? 'bg-clinical-white/15 text-clinical-white hover:bg-clinical-white/25'
-                  : 'bg-clinical-white/30 text-alert-red'
-              }`}
-            >
-              {micOn ? <Mic size={20} /> : <MicOff size={20} />}
-            </button>
-
-            <button
-              onClick={() => setCamOn((v) => !v)}
-              className={`rounded-full p-3 transition-colors ${
-                camOn
-                  ? 'bg-clinical-white/15 text-clinical-white hover:bg-clinical-white/25'
-                  : 'bg-clinical-white/30 text-alert-red'
-              }`}
-            >
-              {camOn ? <Video size={20} /> : <VideoOff size={20} />}
-            </button>
-
+          {/* End call overlay button */}
+          <div className="absolute bottom-4 right-4 z-10">
             <button
               onClick={handleEndCall}
-              className="rounded-full bg-alert-red px-6 py-3 font-semibold text-white transition-colors hover:bg-alert-red/80"
+              className="flex items-center gap-2 rounded-full bg-alert-red px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-alert-red/80"
             >
-              <PhoneOff size={20} />
+              <PhoneOff size={16} />
+              Terminar
             </button>
           </div>
         </div>

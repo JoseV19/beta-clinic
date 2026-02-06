@@ -1,39 +1,33 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
+import { toast } from 'sonner'
 import { Search, Plus, ChevronRight } from 'lucide-react'
-
-export interface Patient {
-  id: number
-  nombre: string
-  documento: string
-  edad: number
-  genero: 'M' | 'F'
-  telefono: string
-  ultimaVisita: string
-  estado: 'activo' | 'inactivo'
-}
-
-export const mockPatients: Patient[] = [
-  { id: 1, nombre: 'María García', documento: '1.023.456.789', edad: 34, genero: 'F', telefono: '310 456 7890', ultimaVisita: '2026-02-03', estado: 'activo' },
-  { id: 2, nombre: 'Carlos López', documento: '1.098.765.432', edad: 45, genero: 'M', telefono: '315 123 4567', ultimaVisita: '2026-02-01', estado: 'activo' },
-  { id: 3, nombre: 'Ana Torres', documento: '1.045.678.901', edad: 28, genero: 'F', telefono: '320 987 6543', ultimaVisita: '2026-01-28', estado: 'activo' },
-  { id: 4, nombre: 'Luis Ramírez', documento: '1.067.890.123', edad: 52, genero: 'M', telefono: '318 654 3210', ultimaVisita: '2026-01-20', estado: 'inactivo' },
-  { id: 5, nombre: 'Sofía Mendoza', documento: '1.034.567.890', edad: 41, genero: 'F', telefono: '311 234 5678', ultimaVisita: '2026-02-04', estado: 'activo' },
-  { id: 6, nombre: 'Jorge Castillo', documento: '1.056.789.012', edad: 38, genero: 'M', telefono: '314 876 5432', ultimaVisita: '2026-01-15', estado: 'activo' },
-  { id: 7, nombre: 'Valentina Ruiz', documento: '1.078.901.234', edad: 29, genero: 'F', telefono: '316 345 6789', ultimaVisita: '2026-02-02', estado: 'activo' },
-  { id: 8, nombre: 'Andrés Morales', documento: '1.089.012.345', edad: 61, genero: 'M', telefono: '319 567 8901', ultimaVisita: '2026-01-10', estado: 'inactivo' },
-  { id: 9, nombre: 'Camila Herrera', documento: '1.012.345.678', edad: 33, genero: 'F', telefono: '312 678 9012', ultimaVisita: '2026-02-05', estado: 'activo' },
-  { id: 10, nombre: 'Diego Vargas', documento: '1.090.123.456', edad: 47, genero: 'M', telefono: '317 789 0123', ultimaVisita: '2026-01-25', estado: 'activo' },
-]
+import { useData } from '../context/DataContext'
 
 export default function PatientList() {
+  const { patients, setPatients } = useData()
   const [query, setQuery] = useState('')
 
-  const filtered = mockPatients.filter(
+  const filtered = patients.filter(
     (p) =>
       p.nombre.toLowerCase().includes(query.toLowerCase()) ||
       p.documento.includes(query),
   )
+
+  function handleAddPatient() {
+    const newPatient = {
+      id: Date.now(),
+      nombre: `Paciente Demo ${patients.length + 1}`,
+      documento: `1.0${Math.floor(Math.random() * 90000000 + 10000000)}`,
+      edad: 20 + Math.floor(Math.random() * 50),
+      genero: Math.random() > 0.5 ? 'F' as const : 'M' as const,
+      telefono: `3${Math.floor(Math.random() * 100)} ${Math.floor(Math.random() * 900 + 100)} ${Math.floor(Math.random() * 9000 + 1000)}`,
+      ultimaVisita: new Date().toISOString().split('T')[0],
+      estado: 'activo' as const,
+    }
+    setPatients((prev) => [newPatient, ...prev])
+    toast.success('Paciente registrado')
+  }
 
   return (
     <div className="mx-auto max-w-5xl space-y-5">
@@ -42,10 +36,13 @@ export default function PatientList() {
         <div>
           <h1 className="text-2xl font-bold text-omega-dark dark:text-clinical-white">Pacientes</h1>
           <p className="mt-0.5 text-sm text-omega-dark/50 dark:text-clinical-white/40">
-            {mockPatients.length} registrados
+            {patients.length} registrados
           </p>
         </div>
-        <button className="flex items-center gap-2 rounded-lg bg-beta-mint px-4 py-2 text-sm font-semibold text-omega-dark shadow-md shadow-beta-mint/20 transition-all hover:bg-beta-mint/80 hover:shadow-lg hover:shadow-beta-mint/25 active:scale-[0.97]">
+        <button
+          onClick={handleAddPatient}
+          className="flex items-center gap-2 rounded-lg bg-beta-mint px-4 py-2 text-sm font-semibold text-omega-dark shadow-md shadow-beta-mint/20 transition-all hover:bg-beta-mint/80 hover:shadow-lg hover:shadow-beta-mint/25 active:scale-[0.97]"
+        >
           <Plus size={18} />
           Nuevo Paciente
         </button>

@@ -6,36 +6,11 @@ import {
   Plus,
   X,
 } from 'lucide-react'
+import { useData, type Transaction } from '../context/DataContext'
 
 /* ── Types ─────────────────────────────────────────────── */
 
-type TxType = 'ingreso' | 'gasto'
 type Tab = 'todos' | 'ingresos' | 'gastos'
-
-interface Transaction {
-  id: number
-  fecha: string
-  concepto: string
-  monto: number
-  tipo: TxType
-}
-
-/* ── Mock data ─────────────────────────────────────────── */
-
-const initialTransactions: Transaction[] = [
-  { id: 1,  fecha: '2026-02-05', concepto: 'Consulta General — María García',    monto: 85000,  tipo: 'ingreso' },
-  { id: 2,  fecha: '2026-02-05', concepto: 'Consulta Especialista — Carlos López', monto: 120000, tipo: 'ingreso' },
-  { id: 3,  fecha: '2026-02-04', concepto: 'Compra insumos médicos',              monto: 340000, tipo: 'gasto' },
-  { id: 4,  fecha: '2026-02-04', concepto: 'Ecografía — Ana Torres',              monto: 95000,  tipo: 'ingreso' },
-  { id: 5,  fecha: '2026-02-03', concepto: 'Servicio de aseo clínico',            monto: 150000, tipo: 'gasto' },
-  { id: 6,  fecha: '2026-02-03', concepto: 'Control hipertensión — Luis Ramírez', monto: 75000,  tipo: 'ingreso' },
-  { id: 7,  fecha: '2026-02-02', concepto: 'Mantenimiento equipos',               monto: 280000, tipo: 'gasto' },
-  { id: 8,  fecha: '2026-02-02', concepto: 'Laboratorio — Sofía Mendoza',         monto: 65000,  tipo: 'ingreso' },
-  { id: 9,  fecha: '2026-02-01', concepto: 'Pago nómina asistentes',              monto: 1200000, tipo: 'gasto' },
-  { id: 10, fecha: '2026-02-01', concepto: 'Telemedicina — Jorge Castillo',       monto: 70000,  tipo: 'ingreso' },
-  { id: 11, fecha: '2026-01-31', concepto: 'Consulta General — Valentina Ruiz',   monto: 85000,  tipo: 'ingreso' },
-  { id: 12, fecha: '2026-01-31', concepto: 'Arriendo consultorio',                monto: 2500000, tipo: 'gasto' },
-]
 
 /* ── Helpers ───────────────────────────────────────────── */
 
@@ -52,7 +27,7 @@ function NewTxModal({
   onSave: (tx: Omit<Transaction, 'id'>) => void
 }) {
   const today = new Date().toISOString().split('T')[0]
-  const [tipo, setTipo] = useState<TxType>('ingreso')
+  const [tipo, setTipo] = useState<Transaction['tipo']>('ingreso')
   const [concepto, setConcepto] = useState('')
   const [monto, setMonto] = useState('')
   const [fecha, setFecha] = useState(today)
@@ -182,7 +157,7 @@ function NewTxModal({
 /* ── Main component ────────────────────────────────────── */
 
 export default function Finanzas() {
-  const [transactions, setTransactions] = useState<Transaction[]>(initialTransactions)
+  const { transactions, setTransactions } = useData()
   const [tab, setTab] = useState<Tab>('todos')
   const [modalOpen, setModalOpen] = useState(false)
 

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { jsPDF } from 'jspdf'
 import { Plus, Trash2, Printer, Pill } from 'lucide-react'
+import { useSettings, type ClinicProfile } from '../context/SettingsContext'
 
 /* ── Types ─────────────────────────────────────────────── */
 
@@ -32,6 +33,7 @@ function generatePrescriptionPDF(
   paciente: string,
   medico: string,
   medicamentos: Medicamento[],
+  clinicProfile: ClinicProfile,
 ) {
   const doc = new jsPDF()
   const w = doc.internal.pageSize.getWidth()
@@ -44,7 +46,7 @@ function generatePrescriptionPDF(
   doc.setTextColor('#FFFFFF')
   doc.setFontSize(18)
   doc.setFont('helvetica', 'bold')
-  doc.text('Beta Clinic', 15, y)
+  doc.text(clinicProfile.nombre || 'Beta Clinic', 15, y)
 
   doc.setFontSize(9)
   doc.setFont('helvetica', 'normal')
@@ -52,8 +54,8 @@ function generatePrescriptionPDF(
 
   doc.setFontSize(8)
   doc.setTextColor('#CCCCCC')
-  doc.text('NIT: 900.123.456-7 | Tel: (601) 555-0100', w - 15, y, { align: 'right' })
-  doc.text('Calle 100 #15-20, Bogotá D.C., Colombia', w - 15, y + 7, { align: 'right' })
+  doc.text(`NIT: ${clinicProfile.nit} | Tel: ${clinicProfile.telefono}`, w - 15, y, { align: 'right' })
+  doc.text(clinicProfile.direccion, w - 15, y + 7, { align: 'right' })
 
   y = 48
 
@@ -166,6 +168,7 @@ function generatePrescriptionPDF(
 /* ── Component ─────────────────────────────────────────── */
 
 export default function Recetas() {
+  const { clinic } = useSettings()
   const [paciente, setPaciente] = useState(pacientes[0])
   const [medicamentos, setMedicamentos] = useState<Medicamento[]>([])
 
@@ -195,7 +198,7 @@ export default function Recetas() {
 
   function handlePrint() {
     if (medicamentos.length === 0) return
-    generatePrescriptionPDF(paciente, 'Dr. Alejandro Rodríguez — RM-12345', medicamentos)
+    generatePrescriptionPDF(paciente, 'Dr. Alejandro Rodríguez — RM-12345', medicamentos, clinic)
   }
 
   const inputClass =

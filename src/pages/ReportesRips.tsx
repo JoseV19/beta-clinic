@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { toast } from 'sonner'
 import { Download, FileBarChart, Filter } from 'lucide-react'
 import {
   generateRipsJSON,
@@ -48,7 +49,19 @@ export default function ReportesRips() {
   }
 
   function handleExport() {
-    downloadRipsFile(ripsData)
+    toast.promise(
+      new Promise<void>((resolve) => {
+        setTimeout(() => {
+          downloadRipsFile(ripsData)
+          resolve()
+        }, 2000)
+      }),
+      {
+        loading: 'Generando reporte...',
+        success: 'Reporte descargado',
+        error: 'Error al generar reporte',
+      },
+    )
   }
 
   return (
