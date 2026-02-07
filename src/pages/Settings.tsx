@@ -7,12 +7,18 @@ import {
   Save,
   Trash2,
   Check,
+  Stethoscope,
+  SmilePlus,
+  Baby,
+  Apple,
+  Layers,
 } from 'lucide-react'
 import {
   useSettings,
   accentColorMap,
   type AccentColor,
 } from '../context/SettingsContext'
+import { useClinic, type ClinicType } from '../context/ClinicContext'
 
 /* ── Shared styles ────────────────────────────────────── */
 
@@ -33,14 +39,37 @@ const accentOptions: { key: AccentColor; label: string }[] = [
   { key: 'orange', label: 'Naranja' },
 ]
 
+/* ── Specialty options ───────────────────────────────── */
+
+const SPECIALTIES: {
+  type: ClinicType
+  label: string
+  description: string
+  icon: React.FC<{ size?: number }>
+}[] = [
+  { type: 'general', label: 'Medicina General', description: 'Consultas, recetas y laboratorios', icon: Stethoscope },
+  { type: 'dental', label: 'Odontología', description: 'Odontograma y presupuestos dentales', icon: SmilePlus },
+  { type: 'pediatrics', label: 'Pediatría', description: 'Crecimiento y vacunación infantil', icon: Baby },
+  { type: 'nutrition', label: 'Nutrición', description: 'Planes alimentarios y evaluaciones', icon: Apple },
+]
+
 /* ── Component ────────────────────────────────────────── */
 
 export default function Settings() {
   const { clinic, setClinic, appearance, setAppearance, clearAllData } = useSettings()
+  const { clinicType, setClinicType } = useClinic()
 
   // Local form state for clinic profile
   const [form, setForm] = useState(clinic)
   const [confirmClear, setConfirmClear] = useState(false)
+
+  function handleSpecialtyChange(type: ClinicType) {
+    if (type === clinicType) return
+    setClinicType(type)
+    const label = SPECIALTIES.find(s => s.type === type)?.label ?? type
+    toast.success(`Cambiando a protocolo ${label}...`)
+    setTimeout(() => window.location.reload(), 1000)
+  }
 
   function handleProfileChange(field: keyof typeof form, value: string) {
     setForm((f) => ({ ...f, [field]: value }))
@@ -75,6 +104,62 @@ export default function Settings() {
         <p className="mt-0.5 text-sm text-omega-dark/50 dark:text-clinical-white/40">
           Personaliza tu experiencia en Beta Clinic
         </p>
+      </div>
+
+      {/* ── Section 0: Active Specialty ─────────────────── */}
+      <div className={sectionClass}>
+        <h2 className={sectionTitle}>
+          <Layers size={20} className="text-omega-violet dark:text-beta-mint" />
+          Módulo Clínico Activo
+        </h2>
+        <p className="mt-1 mb-5 text-xs text-omega-dark/50 dark:text-clinical-white/40">
+          Selecciona la especialidad para adaptar las herramientas del sistema
+        </p>
+
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {SPECIALTIES.map(({ type, label, description, icon: Icon }) => {
+            const isActive = type === clinicType
+            return (
+              <button
+                key={type}
+                type="button"
+                onClick={() => handleSpecialtyChange(type)}
+                className={`group relative flex flex-col items-center gap-2 rounded-xl border-2 p-4 text-center transition-all ${
+                  isActive
+                    ? 'border-beta-mint bg-beta-mint/10 shadow-md shadow-beta-mint/10 dark:bg-beta-mint/5'
+                    : 'border-omega-violet/15 hover:border-beta-mint/40 hover:bg-omega-violet/5 dark:border-clinical-white/10 dark:hover:border-beta-mint/30 dark:hover:bg-clinical-white/5'
+                }`}
+              >
+                <div
+                  className={`flex h-10 w-10 items-center justify-center rounded-xl transition-colors ${
+                    isActive
+                      ? 'bg-beta-mint/20 text-beta-mint'
+                      : 'bg-omega-dark/5 text-omega-dark/40 group-hover:bg-beta-mint/10 group-hover:text-beta-mint dark:bg-clinical-white/5 dark:text-clinical-white/30'
+                  }`}
+                >
+                  <Icon size={22} />
+                </div>
+                <span
+                  className={`text-sm font-semibold transition-colors ${
+                    isActive
+                      ? 'text-beta-mint'
+                      : 'text-omega-dark dark:text-clinical-white'
+                  }`}
+                >
+                  {label}
+                </span>
+                <span className="text-[11px] leading-tight text-omega-dark/40 dark:text-clinical-white/30">
+                  {description}
+                </span>
+                {isActive && (
+                  <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-beta-mint">
+                    <Check size={12} className="text-omega-dark" />
+                  </span>
+                )}
+              </button>
+            )
+          })}
+        </div>
       </div>
 
       {/* ── Section 1: Clinic Profile ──────────────────── */}

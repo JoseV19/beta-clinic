@@ -58,10 +58,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
 
   const accentHex = accentColorMap[appearance.accentColor] ?? accentColorMap.mint
 
-  // Apply accent color CSS variable
-  useEffect(() => {
-    document.documentElement.style.setProperty('--color-accent', accentHex)
-  }, [accentHex])
+  // Note: --color-accent is now driven by ClinicContext (specialty theme)
 
   // Apply reduced animations
   useEffect(() => {

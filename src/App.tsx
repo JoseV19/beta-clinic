@@ -1,11 +1,13 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom'
 import { SignedIn, SignedOut, RedirectToSignIn, useAuth } from '@clerk/clerk-react'
+import { useClinic } from './context/ClinicContext'
 import LoadingScreen from './components/ui/LoadingScreen'
 import MainLayout from './layouts/MainLayout'
 import LandingPage from './pages/LandingPage'
 import Login from './pages/Login'
 import SignInPage from './pages/auth/SignInPage'
 import SignUpPage from './pages/auth/SignUpPage'
+import Onboarding from './pages/Onboarding'
 import Dashboard from './pages/Dashboard'
 import Agenda from './pages/Agenda'
 import Pacientes from './pages/Pacientes'
@@ -20,11 +22,31 @@ import Laboratorios from './pages/Laboratorios'
 import Settings from './pages/Settings'
 import Inventory from './pages/Inventory'
 import Tasks from './pages/Tasks'
+import Odontograma from './pages/specialty/Odontograma'
+import Tratamientos from './pages/specialty/Tratamientos'
+import Presupuestos from './pages/specialty/Presupuestos'
+import PediatricDashboard from './pages/pediatrics/PediatricDashboard'
+import NutritionDashboard from './pages/nutrition/NutritionDashboard'
 import PatientLayout from './layouts/PatientLayout'
 import PortalHome from './pages/portal/PortalHome'
 import PortalAgendar from './pages/portal/PortalAgendar'
 import PortalRecetas from './pages/portal/PortalRecetas'
 import PortalPerfil from './pages/portal/PortalPerfil'
+
+/* ── Onboarding guard ─────────────────────────────────── */
+
+function RequireOnboarding() {
+  const { isOnboarded } = useClinic()
+  const location = useLocation()
+
+  if (!isOnboarded) {
+    return <Navigate to="/onboarding" state={{ from: location }} replace />
+  }
+
+  return <Outlet />
+}
+
+/* ── App ──────────────────────────────────────────────── */
 
 function App() {
   const { isLoaded } = useAuth()
@@ -40,12 +62,27 @@ function App() {
         <Route path="/sign-in/*" element={<SignInPage />} />
         <Route path="/sign-up/*" element={<SignUpPage />} />
 
-        {/* Rutas protegidas — requieren autenticación */}
+        {/* Onboarding — requiere autenticación pero NO onboarding */}
+        <Route
+          path="/onboarding"
+          element={
+            <>
+              <SignedIn>
+                <Onboarding />
+              </SignedIn>
+              <SignedOut>
+                <RedirectToSignIn />
+              </SignedOut>
+            </>
+          }
+        />
+
+        {/* Rutas protegidas — requieren autenticación + onboarding */}
         <Route
           element={
             <>
               <SignedIn>
-                <MainLayout />
+                <RequireOnboarding />
               </SignedIn>
               <SignedOut>
                 <RedirectToSignIn />
@@ -53,20 +90,32 @@ function App() {
             </>
           }
         >
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/agenda" element={<Agenda />} />
-          <Route path="/pacientes" element={<Pacientes />} />
-          <Route path="/pacientes/:id" element={<PatientDetail />} />
-          <Route path="/consultas" element={<Consultas />} />
-          <Route path="/finanzas" element={<Finanzas />} />
-          <Route path="/telemedicina" element={<Telemedicina />} />
-          <Route path="/reportes-rips" element={<ReportesRips />} />
-          <Route path="/recetas" element={<Recetas />} />
-          <Route path="/directorio" element={<Directorio />} />
-          <Route path="/laboratorios" element={<Laboratorios />} />
-          <Route path="/inventario" element={<Inventory />} />
-          <Route path="/tareas" element={<Tasks />} />
-          <Route path="/configuracion" element={<Settings />} />
+          <Route element={<MainLayout />}>
+            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/agenda" element={<Agenda />} />
+            <Route path="/pacientes" element={<Pacientes />} />
+            <Route path="/pacientes/:id" element={<PatientDetail />} />
+            <Route path="/consultas" element={<Consultas />} />
+            <Route path="/finanzas" element={<Finanzas />} />
+            <Route path="/telemedicina" element={<Telemedicina />} />
+            <Route path="/reportes-rips" element={<ReportesRips />} />
+            <Route path="/recetas" element={<Recetas />} />
+            <Route path="/directorio" element={<Directorio />} />
+            <Route path="/laboratorios" element={<Laboratorios />} />
+            <Route path="/inventario" element={<Inventory />} />
+            <Route path="/tareas" element={<Tasks />} />
+            <Route path="/configuracion" element={<Settings />} />
+            {/* Specialty: Dental */}
+            <Route path="/odontograma" element={<Odontograma />} />
+            <Route path="/tratamientos" element={<Tratamientos />} />
+            <Route path="/presupuestos" element={<Presupuestos />} />
+            {/* Specialty: Pediatrics */}
+            <Route path="/crecimiento" element={<PediatricDashboard />} />
+            <Route path="/vacunacion" element={<PediatricDashboard />} />
+            {/* Specialty: Nutrition */}
+            <Route path="/calculadora" element={<NutritionDashboard />} />
+            <Route path="/planificador" element={<NutritionDashboard />} />
+          </Route>
         </Route>
 
         {/* Portal del Paciente — Beta Life */}

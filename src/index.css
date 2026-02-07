@@ -3,7 +3,13 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 :root {
+  --color-primary: #7C3AED;
   --color-accent: #7FFFD4;
+  --tooth-fill: #FFFFFF;
+}
+
+.dark {
+  --tooth-fill: #2A1F3D;
 }
 
 body {

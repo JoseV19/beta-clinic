@@ -7,6 +7,7 @@ import App from './App.tsx'
 import { ThemeProvider } from './context/ThemeContext.tsx'
 import { DataProvider } from './context/DataContext.tsx'
 import { SettingsProvider } from './context/SettingsContext.tsx'
+import { ClinicProvider } from './context/ClinicContext.tsx'
 
 const PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
 
@@ -28,11 +29,13 @@ createRoot(document.getElementById('root')!).render(
       }}
     >
       <ThemeProvider>
-        <SettingsProvider>
-          <DataProvider>
-            <App />
-          </DataProvider>
-        </SettingsProvider>
+        <ClinicProvider>
+          <SettingsProvider>
+            <DataProvider>
+              <App />
+            </DataProvider>
+          </SettingsProvider>
+        </ClinicProvider>
       </ThemeProvider>
     </ClerkProvider>
   </StrictMode>,

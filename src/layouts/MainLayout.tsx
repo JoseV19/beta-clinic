@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
 import { UserButton } from '@clerk/clerk-react'
 import {
@@ -19,29 +19,113 @@ import {
   X,
   Sun,
   Moon,
+  SmilePlus,
+  TrendingUp,
+  Syringe,
+  Baby,
+  Apple,
+  ChevronDown,
+  Calculator,
+  UtensilsCrossed,
+  type LucideIcon,
 } from 'lucide-react'
-import { Toaster } from 'sonner'
+import { Toaster, toast } from 'sonner'
 import { useTheme } from '../context/ThemeContext'
+import { useClinic, type ClinicType } from '../context/ClinicContext'
 
-const navItems = [
+/* ── Nav item type ───────────────────────────────────── */
+
+interface NavItem {
+  to: string
+  label: string
+  icon: LucideIcon
+}
+
+/* ── Base items (all clinic types) ───────────────────── */
+
+const baseItems: NavItem[] = [
   { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { to: '/agenda', label: 'Agenda', icon: CalendarDays },
   { to: '/pacientes', label: 'Pacientes', icon: Users },
-  { to: '/consultas', label: 'Consultas', icon: Stethoscope },
   { to: '/finanzas', label: 'Finanzas', icon: DollarSign },
+]
+
+/* ── Specialty-specific items ────────────────────────── */
+
+const specialtyItems: Record<ClinicType, NavItem[]> = {
+  general: [
+    { to: '/consultas', label: 'Consultas', icon: Stethoscope },
+    { to: '/recetas', label: 'Recetas', icon: ClipboardPlus },
+    { to: '/laboratorios', label: 'Laboratorios', icon: FlaskConical },
+  ],
+  dental: [
+    { to: '/odontograma', label: 'Odontograma', icon: SmilePlus },
+    { to: '/presupuestos', label: 'Presupuestos', icon: DollarSign },
+  ],
+  pediatrics: [
+    { to: '/crecimiento', label: 'Crecimiento', icon: TrendingUp },
+    { to: '/vacunacion', label: 'Vacunación', icon: Syringe },
+  ],
+  nutrition: [
+    { to: '/calculadora', label: 'Calculadora IMC', icon: Calculator },
+    { to: '/planificador', label: 'Planificador Dieta', icon: UtensilsCrossed },
+  ],
+}
+
+/* ── Quick-switch options ──────────────────────────── */
+
+const QUICK_SWITCH: { type: ClinicType; label: string; icon: LucideIcon }[] = [
+  { type: 'general', label: 'Medicina General', icon: Stethoscope },
+  { type: 'dental', label: 'Odontología', icon: SmilePlus },
+  { type: 'pediatrics', label: 'Pediatría', icon: Baby },
+  { type: 'nutrition', label: 'Nutrición', icon: Apple },
+]
+
+/* ── Shared items (all clinic types, after specialty) ── */
+
+const sharedItems: NavItem[] = [
   { to: '/telemedicina', label: 'Telemedicina', icon: Video },
   { to: '/reportes-rips', label: 'Reportes RIPS', icon: FileBarChart },
-  { to: '/recetas', label: 'Recetas', icon: ClipboardPlus },
-  { to: '/laboratorios', label: 'Laboratorios', icon: FlaskConical },
   { to: '/inventario', label: 'Inventario', icon: Package },
   { to: '/tareas', label: 'Tareas', icon: ClipboardCheck },
   { to: '/directorio', label: 'Directorio', icon: Contact },
   { to: '/configuracion', label: 'Configuración', icon: Settings },
 ]
 
+/* ── Component ───────────────────────────────────────── */
+
 export default function MainLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [switchOpen, setSwitchOpen] = useState(false)
+  const switchRef = useRef<HTMLDivElement>(null)
   const { theme, toggleTheme } = useTheme()
+  const { clinicType, setClinicType } = useClinic()
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    if (!switchOpen) return
+    function handleClick(e: MouseEvent) {
+      if (switchRef.current && !switchRef.current.contains(e.target as Node)) {
+        setSwitchOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [switchOpen])
+
+  function handleQuickSwitch(type: ClinicType) {
+    setSwitchOpen(false)
+    if (type === clinicType) return
+    setClinicType(type)
+    const label = QUICK_SWITCH.find(s => s.type === type)?.label ?? type
+    toast.success(`Cambiando a protocolo ${label}...`)
+    setTimeout(() => window.location.reload(), 1000)
+  }
+
+  const navItems = useMemo(() => {
+    const specific = specialtyItems[clinicType ?? 'general'] ?? []
+    return [...baseItems, ...specific, ...sharedItems]
+  }, [clinicType])
 
   return (
     <div className="flex h-screen overflow-hidden bg-clinical-white dark:bg-omega-abyss">
@@ -77,8 +161,45 @@ export default function MainLayout() {
           </button>
         </div>
 
+        {/* Specialty badge — quick switch */}
+        {clinicType && (
+          <div ref={switchRef} className="relative mx-3 mb-2">
+            <button
+              onClick={() => setSwitchOpen(o => !o)}
+              className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-beta-mint/10 px-3 py-1.5 transition-colors hover:bg-beta-mint/15"
+            >
+              <span className="text-[10px] font-bold uppercase tracking-widest text-beta-mint">
+                {QUICK_SWITCH.find(s => s.type === clinicType)?.label}
+              </span>
+              <ChevronDown
+                size={12}
+                className={`text-beta-mint/60 transition-transform duration-200 ${switchOpen ? 'rotate-180' : ''}`}
+              />
+            </button>
+
+            {switchOpen && (
+              <div className="absolute left-0 right-0 top-full z-40 mt-1 overflow-hidden rounded-lg border border-clinical-white/10 bg-omega-dark shadow-xl">
+                {QUICK_SWITCH.map(({ type, label, icon: Icon }) => (
+                  <button
+                    key={type}
+                    onClick={() => handleQuickSwitch(type)}
+                    className={`flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-xs font-medium transition-colors ${
+                      type === clinicType
+                        ? 'bg-beta-mint/15 text-beta-mint'
+                        : 'text-clinical-white/70 hover:bg-clinical-white/5 hover:text-clinical-white'
+                    }`}
+                  >
+                    <Icon size={14} strokeWidth={1.75} />
+                    {label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Navigation */}
-        <nav className="mt-4 flex-1 space-y-1 px-3">
+        <nav className="mt-2 flex-1 space-y-1 overflow-y-auto px-3">
           {navItems.map(({ to, label, icon: Icon }) => (
             <NavLink
               key={to}
@@ -159,8 +280,8 @@ export default function MainLayout() {
               color: '#F8F9FA',
             },
             classNames: {
-              success: '[&>[data-icon]]:text-[#7FFFD4]',
-              error: '[&>[data-icon]]:text-[#E53935]',
+              success: '[&>[data-icon]]:text-beta-mint',
+              error: '[&>[data-icon]]:text-alert-red',
             },
           }}
         />
