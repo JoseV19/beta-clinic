@@ -1,6 +1,6 @@
 import { useMemo, useCallback } from 'react'
 import { Calendar, dateFnsLocalizer, type View } from 'react-big-calendar'
-import { format, parse, startOfWeek, getDay, addHours, setHours, setMinutes } from 'date-fns'
+import { format, parse, startOfWeek, getDay, setHours, setMinutes } from 'date-fns'
 import { es } from 'date-fns/locale/es'
 import { toast } from 'sonner'
 

@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { SignedIn, SignedOut } from '@clerk/clerk-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   FileBarChart,
@@ -11,9 +10,6 @@ import {
   Zap,
   Globe,
   HeartPulse,
-  Play,
-  Menu,
-  X,
   ArrowRight,
   ChevronRight,
   Check,
@@ -154,16 +150,9 @@ const footerLinks = {
 
 /* ── Grid pattern style ───────────────────────────────────── */
 
-const gridStyle = {
-  backgroundImage:
-    'linear-gradient(rgba(255,255,255,.04) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.04) 1px, transparent 1px)',
-  backgroundSize: '60px 60px',
-}
-
 /* ── Component ────────────────────────────────────────────── */
 
 export default function LandingPage() {
-  const [menuOpen, setMenuOpen] = useState(false)
   const [currency, setCurrency] = useState<Currency>('USD')
 
   return (

@@ -18,7 +18,6 @@ import {
   History,
   Settings2,
   ChevronDown,
-  User,
   type LucideIcon,
 } from 'lucide-react'
 import { useData } from '../context/DataContext'
@@ -390,7 +389,7 @@ function SendAllProgress({
    ══════════════════════════════════════════════════════════ */
 
 export default function ReminderCenter() {
-  const { patients, appointments } = useData()
+  const { patients } = useData()
   const { clinicType } = useClinic()
 
   /* ── Derive phone map ───────────────────────────────── */

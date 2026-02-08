@@ -576,7 +576,7 @@ export default function FinancialTerminal() {
                     fontSize: '12px',
                     color: '#F9FAFB',
                   }}
-                  formatter={(v: number) => [fmtMoney(v, cur), 'Ingresos']}
+                  formatter={((v: number) => fmtMoney(v, cur)) as never}
                 />
                 <Area
                   type="monotone"

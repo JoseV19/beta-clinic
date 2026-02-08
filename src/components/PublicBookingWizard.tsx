@@ -567,7 +567,7 @@ export default function PublicBookingWizard() {
                         className="flex h-12 w-12 items-center justify-center rounded-xl"
                         style={{ backgroundColor: themeColor + '20' }}
                       >
-                        <selectedSpecialty.icon size={24} style={{ color: themeAccent }} />
+                        <span style={{ color: themeAccent }}><selectedSpecialty.icon size={24} /></span>
                       </div>
                       <div>
                         <p className="font-semibold text-clinical-white">{selectedSpecialty.label}</p>

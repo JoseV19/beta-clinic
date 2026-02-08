@@ -420,7 +420,7 @@ export default function ExpenseTracker() {
                         fontSize: '12px',
                         color: '#F9FAFB',
                       }}
-                      formatter={(v: number) => [fmtMoney(v, cur), '']}
+                      formatter={((v: number) => fmtMoney(v, cur)) as never}
                     />
                     <Legend
                       iconType="circle"
