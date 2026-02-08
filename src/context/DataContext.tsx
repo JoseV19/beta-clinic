@@ -1,8 +1,38 @@
-import { createContext, useContext, type ReactNode } from 'react'
-import { usePersistentState } from '../hooks/usePersistentState'
-import { mockPatients as defaultPatients, type Patient } from '../data/patients'
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  useCallback,
+  type ReactNode,
+} from 'react'
+import { toast } from 'sonner'
+import { useSupabase } from './SupabaseContext'
+import type { Patient } from '../data/patients'
+import {
+  dbPatientToFrontend,
+  frontendPatientToDb,
+  dbFinanceToFrontend,
+  frontendTransactionToDb,
+  dbAppointmentToFrontend,
+} from '../services/mappers'
+import {
+  fetchPatients as svcFetchPatients,
+  createPatient as svcCreatePatient,
+  updatePatient as svcUpdatePatient,
+  deletePatient as svcDeletePatient,
+} from '../services/patientService'
+import {
+  fetchFinance as svcFetchFinance,
+  createFinance as svcCreateFinance,
+  voidFinance as svcVoidFinance,
+} from '../services/financeService'
+import { fetchAppointments as svcFetchAppointments } from '../services/appointmentService'
 
 /* ── Types ─────────────────────────────────────────────── */
+
+export type MetodoPago = 'efectivo' | 'tarjeta' | 'transferencia' | 'seguro'
+export type CategoriaGasto = 'alquiler' | 'servicios' | 'nomina' | 'insumos' | 'mantenimiento' | 'marketing' | 'otro'
 
 export interface Transaction {
   id: number
@@ -10,6 +40,11 @@ export interface Transaction {
   concepto: string
   monto: number
   tipo: 'ingreso' | 'gasto'
+  metodo?: MetodoPago
+  paciente?: string
+  anulado?: boolean
+  categoria?: CategoriaGasto
+  comprobante?: string
 }
 
 export interface Appointment {
@@ -18,32 +53,6 @@ export interface Appointment {
   doctor: string
   status: string
 }
-
-/* ── Default data ─────────────────────────────────────── */
-
-const defaultAppointments: Appointment[] = [
-  { patient: 'María García', time: '09:00 AM', doctor: 'Dr. Rodríguez', status: 'Confirmada' },
-  { patient: 'Carlos López', time: '09:30 AM', doctor: 'Dra. Martínez', status: 'Pendiente' },
-  { patient: 'Ana Torres', time: '10:00 AM', doctor: 'Dr. Rodríguez', status: 'Confirmada' },
-  { patient: 'Luis Ramírez', time: '10:30 AM', doctor: 'Dr. Herrera', status: 'Cancelada' },
-  { patient: 'Sofía Mendoza', time: '11:00 AM', doctor: 'Dra. Martínez', status: 'Pendiente' },
-  { patient: 'Jorge Castillo', time: '11:30 AM', doctor: 'Dr. Herrera', status: 'Confirmada' },
-]
-
-const defaultTransactions: Transaction[] = [
-  { id: 1, fecha: '2026-02-05', concepto: 'Consulta General — María García', monto: 85000, tipo: 'ingreso' },
-  { id: 2, fecha: '2026-02-05', concepto: 'Consulta Especialista — Carlos López', monto: 120000, tipo: 'ingreso' },
-  { id: 3, fecha: '2026-02-04', concepto: 'Compra insumos médicos', monto: 340000, tipo: 'gasto' },
-  { id: 4, fecha: '2026-02-04', concepto: 'Ecografía — Ana Torres', monto: 95000, tipo: 'ingreso' },
-  { id: 5, fecha: '2026-02-03', concepto: 'Servicio de aseo clínico', monto: 150000, tipo: 'gasto' },
-  { id: 6, fecha: '2026-02-03', concepto: 'Control hipertensión — Luis Ramírez', monto: 75000, tipo: 'ingreso' },
-  { id: 7, fecha: '2026-02-02', concepto: 'Mantenimiento equipos', monto: 280000, tipo: 'gasto' },
-  { id: 8, fecha: '2026-02-02', concepto: 'Laboratorio — Sofía Mendoza', monto: 65000, tipo: 'ingreso' },
-  { id: 9, fecha: '2026-02-01', concepto: 'Pago nómina asistentes', monto: 1200000, tipo: 'gasto' },
-  { id: 10, fecha: '2026-02-01', concepto: 'Telemedicina — Jorge Castillo', monto: 70000, tipo: 'ingreso' },
-  { id: 11, fecha: '2026-01-31', concepto: 'Consulta General — Valentina Ruiz', monto: 85000, tipo: 'ingreso' },
-  { id: 12, fecha: '2026-01-31', concepto: 'Arriendo consultorio', monto: 2500000, tipo: 'gasto' },
-]
 
 /* ── Context ──────────────────────────────────────────── */
 
@@ -54,17 +63,151 @@ interface DataContextValue {
   setAppointments: React.Dispatch<React.SetStateAction<Appointment[]>>
   transactions: Transaction[]
   setTransactions: React.Dispatch<React.SetStateAction<Transaction[]>>
+
+  /* Async CRUD */
+  addPatient: (data: Omit<Patient, 'id'>) => Promise<void>
+  updatePatient: (updated: Patient) => Promise<void>
+  deletePatient: (id: number) => Promise<void>
+  addTransaction: (data: Omit<Transaction, 'id'>) => Promise<void>
+  voidTransaction: (id: number) => Promise<void>
+  refresh: () => Promise<void>
+
+  loading: boolean
+  error: string | null
 }
 
 const DataContext = createContext<DataContextValue | null>(null)
 
 export function DataProvider({ children }: { children: ReactNode }) {
-  const [patients, setPatients] = usePersistentState<Patient[]>('beta_patients', defaultPatients)
-  const [appointments, setAppointments] = usePersistentState<Appointment[]>('beta_appointments', defaultAppointments)
-  const [transactions, setTransactions] = usePersistentState<Transaction[]>('beta_finance', defaultTransactions)
+  const { supabase, profile, loading: authLoading } = useSupabase()
+
+  const [patients, setPatients] = useState<Patient[]>([])
+  const [appointments, setAppointments] = useState<Appointment[]>([])
+  const [transactions, setTransactions] = useState<Transaction[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  /* ── Fetch all data ────────────────────────────────── */
+
+  const fetchAll = useCallback(async () => {
+    if (!profile) return
+
+    setLoading(true)
+    setError(null)
+
+    try {
+      const [dbPatients, dbFinance, dbAppointments] = await Promise.all([
+        svcFetchPatients(supabase),
+        svcFetchFinance(supabase),
+        svcFetchAppointments(supabase),
+      ])
+
+      setPatients(dbPatients.map(dbPatientToFrontend))
+      setTransactions(dbFinance.map(dbFinanceToFrontend))
+      setAppointments(dbAppointments.map(dbAppointmentToFrontend))
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Error al cargar datos'
+      setError(msg)
+      toast.error(msg)
+    } finally {
+      setLoading(false)
+    }
+  }, [supabase, profile])
+
+  useEffect(() => {
+    if (authLoading) return
+    if (!profile) {
+      setPatients([])
+      setTransactions([])
+      setAppointments([])
+      setLoading(false)
+      return
+    }
+    fetchAll()
+  }, [authLoading, profile, fetchAll])
+
+  /* ── Patient CRUD ──────────────────────────────────── */
+
+  const addPatient = useCallback(async (data: Omit<Patient, 'id'>) => {
+    try {
+      const dbData = frontendPatientToDb(data as Patient)
+      const created = await svcCreatePatient(supabase, dbData)
+      setPatients((prev) => [dbPatientToFrontend(created), ...prev])
+      toast.success('Paciente registrado')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Error al crear paciente')
+    }
+  }, [supabase])
+
+  const updatePatientFn = useCallback(async (updated: Patient) => {
+    try {
+      const dbData = frontendPatientToDb(updated)
+      const result = await svcUpdatePatient(supabase, updated.id, dbData)
+      setPatients((prev) =>
+        prev.map((p) => (p.id === updated.id ? dbPatientToFrontend(result) : p)),
+      )
+      toast.success('Paciente actualizado')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Error al actualizar paciente')
+    }
+  }, [supabase])
+
+  const deletePatientFn = useCallback(async (id: number) => {
+    try {
+      await svcDeletePatient(supabase, id)
+      setPatients((prev) => prev.filter((p) => p.id !== id))
+      toast.success('Paciente eliminado')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Error al eliminar paciente')
+    }
+  }, [supabase])
+
+  /* ── Transaction CRUD ──────────────────────────────── */
+
+  const addTransaction = useCallback(async (data: Omit<Transaction, 'id'>) => {
+    try {
+      const dbData = frontendTransactionToDb(data)
+      const created = await svcCreateFinance(supabase, dbData)
+      setTransactions((prev) => [dbFinanceToFrontend(created), ...prev])
+      toast.success('Movimiento registrado')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Error al registrar movimiento')
+    }
+  }, [supabase])
+
+  const voidTransaction = useCallback(async (id: number) => {
+    try {
+      await svcVoidFinance(supabase, id)
+      setTransactions((prev) =>
+        prev.map((t) => (t.id === id ? { ...t, anulado: true } : t)),
+      )
+      toast.success('Movimiento anulado')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Error al anular movimiento')
+    }
+  }, [supabase])
+
+  /* ── Value ─────────────────────────────────────────── */
 
   return (
-    <DataContext.Provider value={{ patients, setPatients, appointments, setAppointments, transactions, setTransactions }}>
+    <DataContext.Provider
+      value={{
+        patients,
+        setPatients,
+        appointments,
+        setAppointments,
+        transactions,
+        setTransactions,
+        addPatient,
+        updatePatient: updatePatientFn,
+        deletePatient: deletePatientFn,
+        addTransaction,
+        voidTransaction,
+        refresh: fetchAll,
+        loading,
+        error,
+      }}
+    >
       {children}
     </DataContext.Provider>
   )

@@ -1,12 +1,14 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { toast } from 'sonner'
-import { Search, Plus, ChevronRight } from 'lucide-react'
+import { Search, Plus, ChevronRight, Pencil } from 'lucide-react'
 import { useData } from '../context/DataContext'
+import type { Patient } from '../data/patients'
+import EditPatientModal from './EditPatientModal'
 
 export default function PatientList() {
-  const { patients, setPatients } = useData()
+  const { patients, addPatient, updatePatient, deletePatient } = useData()
   const [query, setQuery] = useState('')
+  const [editingPatient, setEditingPatient] = useState<Patient | null>(null)
 
   const filtered = patients.filter(
     (p) =>
@@ -25,8 +27,7 @@ export default function PatientList() {
       ultimaVisita: new Date().toISOString().split('T')[0],
       estado: 'activo' as const,
     }
-    setPatients((prev) => [newPatient, ...prev])
-    toast.success('Paciente registrado')
+    addPatient(newPatient)
   }
 
   return (
@@ -106,12 +107,21 @@ export default function PatientList() {
                     </span>
                   </td>
                   <td className="px-5 py-3">
-                    <Link
-                      to={`/pacientes/${p.id}`}
-                      className="inline-flex items-center gap-1 text-xs font-medium text-omega-violet transition-colors hover:text-beta-mint dark:text-beta-mint/70 dark:hover:text-beta-mint"
-                    >
-                      Ver <ChevronRight size={14} />
-                    </Link>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setEditingPatient(p)}
+                        className="rounded-md p-1.5 text-gray-400 transition-colors hover:bg-omega-violet/10 hover:text-omega-violet dark:hover:bg-omega-violet/20 dark:hover:text-beta-mint"
+                        title="Editar paciente"
+                      >
+                        <Pencil size={14} />
+                      </button>
+                      <Link
+                        to={`/pacientes/${p.id}`}
+                        className="inline-flex items-center gap-1 text-xs font-medium text-omega-violet transition-colors hover:text-beta-mint dark:text-beta-mint/70 dark:hover:text-beta-mint"
+                      >
+                        Ver <ChevronRight size={14} />
+                      </Link>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -127,6 +137,23 @@ export default function PatientList() {
           </table>
         </div>
       </div>
+
+      {/* Edit Patient Modal */}
+      {editingPatient && (
+        <EditPatientModal
+          patient={editingPatient}
+          open={!!editingPatient}
+          onClose={() => setEditingPatient(null)}
+          onPatientUpdated={(updated) => {
+            updatePatient(updated)
+            setEditingPatient(null)
+          }}
+          onPatientDeleted={(id) => {
+            deletePatient(id)
+            setEditingPatient(null)
+          }}
+        />
+      )}
     </div>
   )
 }

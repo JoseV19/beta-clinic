@@ -6,11 +6,14 @@ import {
   Printer,
   GripVertical,
   Plus,
+  Sparkles,
+  Loader2,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useSettings } from '../../context/SettingsContext'
 import { useClinic } from '../../context/ClinicContext'
 import { THEME_CONFIG } from '../../data/themeConfig'
+import { generateDietPlan } from '../../services/aiService'
 
 /* ── Constants ─────────────────────────────────────────── */
 
@@ -48,8 +51,39 @@ export default function MealPlanner({ patientName, patientWeight, patientBmi }: 
   const textareaRefs = useRef<(HTMLTextAreaElement | null)[][]>(
     MEALS.map(() => DAYS.map(() => null)),
   )
+  const [isLoading, setIsLoading] = useState(false)
   const { clinic } = useSettings()
   const { clinicType } = useClinic()
+
+  /* ── AI generation ─────────────────────────────────── */
+
+  async function handleGenerateAI() {
+    setIsLoading(true)
+    try {
+      const plan = await generateDietPlan({
+        edad: 30,
+        peso: patientWeight ?? 70,
+        altura: 170,
+        objetivo: 'alimentación saludable',
+        alergias: 'ninguna',
+      })
+
+      setGrid(prev => {
+        const next = prev.map(r => [...r])
+        next[0][0] = plan.breakfast  // Desayuno
+        next[1][0] = plan.snack      // Colación 1
+        next[2][0] = plan.lunch      // Comida
+        next[4][0] = plan.dinner     // Cena
+        return next
+      })
+
+      toast.success('¡Dieta generada por Gemini Flash!')
+    } catch {
+      toast.error('Error al conectar con el servidor de IA')
+    } finally {
+      setIsLoading(false)
+    }
+  }
 
   /* ── Grid helpers ──────────────────────────────────── */
 
@@ -275,6 +309,15 @@ export default function MealPlanner({ patientName, patientWeight, patientBmi }: 
         >
           <Trash2 size={14} />
           Limpiar Todo
+        </button>
+        <button
+          type="button"
+          onClick={handleGenerateAI}
+          disabled={isLoading}
+          className="flex items-center gap-1.5 rounded-lg border border-omega-violet/20 px-3 py-2 text-xs font-semibold text-omega-dark transition-colors hover:bg-omega-violet/10 hover:text-omega-violet disabled:opacity-50 dark:border-clinical-white/10 dark:text-clinical-white"
+        >
+          {isLoading ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+          {isLoading ? 'Generando...' : 'Generar con IA'}
         </button>
         <div className="flex-1" />
         <button

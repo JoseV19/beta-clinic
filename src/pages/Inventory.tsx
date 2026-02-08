@@ -1,5 +1,4 @@
 import { useMemo, useState } from 'react'
-import { toast } from 'sonner'
 import {
   Package,
   Plus,
@@ -9,24 +8,12 @@ import {
   AlertTriangle,
   PackageOpen,
 } from 'lucide-react'
-import { usePersistentState } from '../hooks/usePersistentState'
-
-/* ── Types ─────────────────────────────────────────────── */
-
-interface Product {
-  id: number
-  nombre: string
-  sku: string
-  categoria: 'Medicamento' | 'Insumo' | 'Equipo'
-  stock: number
-  fechaVencimiento: string
-  precioUnitario: number
-}
+import { useInventory, type Product } from '../hooks/useInventory'
 
 /* ── Helpers ───────────────────────────────────────────── */
 
-const fmtCOP = (n: number) =>
-  n.toLocaleString('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 })
+const fmtUSD = (n: number) =>
+  `$ ${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
 function daysUntil(dateStr: string) {
   const target = new Date(dateStr + 'T00:00:00')
@@ -34,21 +21,6 @@ function daysUntil(dateStr: string) {
   now.setHours(0, 0, 0, 0)
   return Math.ceil((target.getTime() - now.getTime()) / 86_400_000)
 }
-
-/* ── Default data ─────────────────────────────────────── */
-
-const defaultProducts: Product[] = [
-  { id: 1, nombre: 'Losartán 50 mg', sku: 'MED-001', categoria: 'Medicamento', stock: 120, fechaVencimiento: '2026-08-15', precioUnitario: 1500 },
-  { id: 2, nombre: 'Ibuprofeno 400 mg', sku: 'MED-002', categoria: 'Medicamento', stock: 85, fechaVencimiento: '2026-05-20', precioUnitario: 800 },
-  { id: 3, nombre: 'Guantes de Nitrilo (caja x100)', sku: 'INS-001', categoria: 'Insumo', stock: 8, fechaVencimiento: '2027-01-10', precioUnitario: 35000 },
-  { id: 4, nombre: 'Jeringa 5 ml (caja x100)', sku: 'INS-002', categoria: 'Insumo', stock: 45, fechaVencimiento: '2027-06-01', precioUnitario: 28000 },
-  { id: 5, nombre: 'Tensiómetro Digital', sku: 'EQP-001', categoria: 'Equipo', stock: 3, fechaVencimiento: '2030-12-31', precioUnitario: 185000 },
-  { id: 6, nombre: 'Amoxicilina 500 mg', sku: 'MED-003', categoria: 'Medicamento', stock: 5, fechaVencimiento: '2026-03-01', precioUnitario: 1200 },
-  { id: 7, nombre: 'Gasa Estéril (paq x10)', sku: 'INS-003', categoria: 'Insumo', stock: 60, fechaVencimiento: '2027-09-15', precioUnitario: 4500 },
-  { id: 8, nombre: 'Oxímetro de Pulso', sku: 'EQP-002', categoria: 'Equipo', stock: 7, fechaVencimiento: '2030-12-31', precioUnitario: 95000 },
-  { id: 9, nombre: 'Metformina 850 mg', sku: 'MED-004', categoria: 'Medicamento', stock: 200, fechaVencimiento: '2026-11-30', precioUnitario: 950 },
-  { id: 10, nombre: 'Alcohol Antiséptico 500 ml', sku: 'INS-004', categoria: 'Insumo', stock: 22, fechaVencimiento: '2026-02-28', precioUnitario: 8500 },
-]
 
 /* ── Category badge ───────────────────────────────────── */
 
@@ -177,7 +149,7 @@ function AddProductModal({
           {/* Precio */}
           <div>
             <label className="mb-1 block text-xs font-medium text-omega-dark/60 dark:text-clinical-white/40">
-              Precio Unitario (COP) *
+              Precio Unitario (USD) *
             </label>
             <input
               type="number"
@@ -228,7 +200,7 @@ function AddProductModal({
 /* ── Main component ────────────────────────────────────── */
 
 export default function Inventory() {
-  const [products, setProducts] = usePersistentState<Product[]>('beta_inventory', defaultProducts)
+  const { items: products, addItem, adjustStock } = useInventory()
   const [modalOpen, setModalOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [catFilter, setCatFilter] = useState<'todos' | Product['categoria']>('todos')
@@ -254,17 +226,8 @@ export default function Inventory() {
   }, [products])
 
   function handleAdd(p: Omit<Product, 'id'>) {
-    setProducts((prev) => [{ ...p, id: Date.now() }, ...prev])
+    addItem(p)
     setModalOpen(false)
-    toast.success('Producto agregado al inventario')
-  }
-
-  function adjustStock(id: number, delta: number) {
-    setProducts((prev) =>
-      prev.map((p) =>
-        p.id === id ? { ...p, stock: Math.max(0, p.stock + delta) } : p,
-      ),
-    )
   }
 
   return (
@@ -449,7 +412,7 @@ export default function Inventory() {
 
                     {/* Precio */}
                     <td className="hidden px-5 py-3 text-right font-semibold text-omega-dark/70 sm:table-cell dark:text-clinical-white/60">
-                      {fmtCOP(p.precioUnitario)}
+                      {fmtUSD(p.precioUnitario)}
                     </td>
                   </tr>
                 )

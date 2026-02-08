@@ -8,6 +8,7 @@ import { ThemeProvider } from './context/ThemeContext.tsx'
 import { DataProvider } from './context/DataContext.tsx'
 import { SettingsProvider } from './context/SettingsContext.tsx'
 import { ClinicProvider } from './context/ClinicContext.tsx'
+import { SupabaseProvider } from './context/SupabaseContext.tsx'
 
 const PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
 
@@ -29,13 +30,15 @@ createRoot(document.getElementById('root')!).render(
       }}
     >
       <ThemeProvider>
-        <ClinicProvider>
-          <SettingsProvider>
-            <DataProvider>
-              <App />
-            </DataProvider>
-          </SettingsProvider>
-        </ClinicProvider>
+        <SupabaseProvider>
+          <ClinicProvider>
+            <SettingsProvider>
+              <DataProvider>
+                <App />
+              </DataProvider>
+            </SettingsProvider>
+          </ClinicProvider>
+        </SupabaseProvider>
       </ThemeProvider>
     </ClerkProvider>
   </StrictMode>,

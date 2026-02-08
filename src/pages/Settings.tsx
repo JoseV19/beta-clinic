@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
 import {
   Building2,
@@ -12,6 +13,8 @@ import {
   Baby,
   Apple,
   Layers,
+  ChevronRight,
+  Printer,
 } from 'lucide-react'
 import {
   useSettings,
@@ -189,15 +192,24 @@ export default function Settings() {
           ))}
         </div>
 
-        {/* Logo placeholder */}
-        <div className="mt-4">
-          <label className="mb-1 block text-xs font-medium text-omega-dark/60 dark:text-clinical-white/40">
-            Logo de la Clínica
-          </label>
-          <div className="flex h-24 items-center justify-center rounded-lg border-2 border-dashed border-omega-violet/20 text-sm text-omega-dark/30 dark:border-clinical-white/10 dark:text-clinical-white/20">
-            Próximamente — Subir logo
+        {/* Link to full clinic settings */}
+        <Link
+          to="/configuracion/clinica"
+          className="mt-4 flex items-center justify-between rounded-xl border border-omega-violet/10 px-4 py-3 transition-colors hover:bg-omega-violet/5 dark:border-clinical-white/10 dark:hover:bg-clinical-white/5"
+        >
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-omega-violet/10 dark:bg-omega-violet/20">
+              <Printer size={16} className="text-omega-violet dark:text-beta-mint" />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-omega-dark dark:text-clinical-white">Configuración Avanzada</p>
+              <p className="text-xs text-omega-dark/50 dark:text-clinical-white/40">
+                Logo, perfil del doctor, vista previa de impresión y más
+              </p>
+            </div>
           </div>
-        </div>
+          <ChevronRight size={18} className="text-omega-dark/30 dark:text-clinical-white/30" />
+        </Link>
 
         <button
           type="submit"

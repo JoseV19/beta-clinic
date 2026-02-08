@@ -10,24 +10,24 @@ import type { Consulta } from '../utils/generateRipsJSON'
 /* ── Mock consultas ────────────────────────────────────── */
 
 const mockConsultas: Consulta[] = [
-  { id: 1,  paciente: 'María García',     identificacion: '1023456789', fecha: '2026-01-05', codigoDiagnostico: 'I10',   diagnostico: 'Hipertensión esencial',        valorConsulta: 85000 },
-  { id: 2,  paciente: 'Carlos López',     identificacion: '1098765432', fecha: '2026-01-08', codigoDiagnostico: 'M54.5', diagnostico: 'Lumbago no especificado',       valorConsulta: 75000 },
-  { id: 3,  paciente: 'Ana Torres',       identificacion: '1045678901', fecha: '2026-01-12', codigoDiagnostico: 'J06.9', diagnostico: 'Infección respiratoria aguda',   valorConsulta: 65000 },
-  { id: 4,  paciente: 'Luis Ramírez',     identificacion: '1067890123', fecha: '2026-01-15', codigoDiagnostico: 'E11.9', diagnostico: 'Diabetes mellitus tipo 2',       valorConsulta: 90000 },
-  { id: 5,  paciente: 'Sofía Mendoza',    identificacion: '1034567890', fecha: '2026-01-20', codigoDiagnostico: 'K21.0', diagnostico: 'Enfermedad por reflujo gastroesofágico', valorConsulta: 80000 },
-  { id: 6,  paciente: 'Jorge Castillo',   identificacion: '1056789012', fecha: '2026-01-22', codigoDiagnostico: 'N39.0', diagnostico: 'Infección de vías urinarias',    valorConsulta: 70000 },
-  { id: 7,  paciente: 'Valentina Ruiz',   identificacion: '1078901234', fecha: '2026-02-01', codigoDiagnostico: 'J45.9', diagnostico: 'Asma no especificada',           valorConsulta: 85000 },
-  { id: 8,  paciente: 'Andrés Morales',   identificacion: '1089012345', fecha: '2026-02-02', codigoDiagnostico: 'I10',   diagnostico: 'Hipertensión esencial',          valorConsulta: 85000 },
-  { id: 9,  paciente: 'Camila Herrera',   identificacion: '1012345678', fecha: '2026-02-03', codigoDiagnostico: 'F41.1', diagnostico: 'Trastorno de ansiedad generalizada', valorConsulta: 95000 },
-  { id: 10, paciente: 'Diego Vargas',     identificacion: '1090123456', fecha: '2026-02-04', codigoDiagnostico: 'M79.3', diagnostico: 'Paniculitis no especificada',     valorConsulta: 70000 },
-  { id: 11, paciente: 'Isabella Rojas',   identificacion: '1011234567', fecha: '2026-02-05', codigoDiagnostico: 'L50.9', diagnostico: 'Urticaria no especificada',       valorConsulta: 65000 },
-  { id: 12, paciente: 'Mateo Ríos',       identificacion: '1022345678', fecha: '2026-02-05', codigoDiagnostico: 'K29.7', diagnostico: 'Gastritis no especificada',       valorConsulta: 75000 },
+  { id: 1,  paciente: 'María García',     identificacion: '1023456789', fecha: '2026-01-05', codigoDiagnostico: 'I10',   diagnostico: 'Hipertensión esencial',        valorConsulta: 50 },
+  { id: 2,  paciente: 'Carlos López',     identificacion: '1098765432', fecha: '2026-01-08', codigoDiagnostico: 'M54.5', diagnostico: 'Lumbago no especificado',       valorConsulta: 45 },
+  { id: 3,  paciente: 'Ana Torres',       identificacion: '1045678901', fecha: '2026-01-12', codigoDiagnostico: 'J06.9', diagnostico: 'Infección respiratoria aguda',   valorConsulta: 40 },
+  { id: 4,  paciente: 'Luis Ramírez',     identificacion: '1067890123', fecha: '2026-01-15', codigoDiagnostico: 'E11.9', diagnostico: 'Diabetes mellitus tipo 2',       valorConsulta: 55 },
+  { id: 5,  paciente: 'Sofía Mendoza',    identificacion: '1034567890', fecha: '2026-01-20', codigoDiagnostico: 'K21.0', diagnostico: 'Enfermedad por reflujo gastroesofágico', valorConsulta: 50 },
+  { id: 6,  paciente: 'Jorge Castillo',   identificacion: '1056789012', fecha: '2026-01-22', codigoDiagnostico: 'N39.0', diagnostico: 'Infección de vías urinarias',    valorConsulta: 45 },
+  { id: 7,  paciente: 'Valentina Ruiz',   identificacion: '1078901234', fecha: '2026-02-01', codigoDiagnostico: 'J45.9', diagnostico: 'Asma no especificada',           valorConsulta: 50 },
+  { id: 8,  paciente: 'Andrés Morales',   identificacion: '1089012345', fecha: '2026-02-02', codigoDiagnostico: 'I10',   diagnostico: 'Hipertensión esencial',          valorConsulta: 50 },
+  { id: 9,  paciente: 'Camila Herrera',   identificacion: '1012345678', fecha: '2026-02-03', codigoDiagnostico: 'F41.1', diagnostico: 'Trastorno de ansiedad generalizada', valorConsulta: 60 },
+  { id: 10, paciente: 'Diego Vargas',     identificacion: '1090123456', fecha: '2026-02-04', codigoDiagnostico: 'M79.3', diagnostico: 'Paniculitis no especificada',     valorConsulta: 45 },
+  { id: 11, paciente: 'Isabella Rojas',   identificacion: '1011234567', fecha: '2026-02-05', codigoDiagnostico: 'L50.9', diagnostico: 'Urticaria no especificada',       valorConsulta: 40 },
+  { id: 12, paciente: 'Mateo Ríos',       identificacion: '1022345678', fecha: '2026-02-05', codigoDiagnostico: 'K29.7', diagnostico: 'Gastritis no especificada',       valorConsulta: 45 },
 ]
 
 /* ── Helpers ───────────────────────────────────────────── */
 
 const fmtCurrency = (n: number) =>
-  n.toLocaleString('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 })
+  `$ ${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
 /* ── Component ─────────────────────────────────────────── */
 

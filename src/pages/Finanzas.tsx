@@ -5,8 +5,13 @@ import {
   Scale,
   Plus,
   X,
+  LayoutGrid,
+  Terminal,
+  Receipt,
 } from 'lucide-react'
 import { useData, type Transaction } from '../context/DataContext'
+import FinancialTerminal from '../components/FinancialTerminal'
+import ExpenseTracker from '../components/ExpenseTracker'
 
 /* ── Types ─────────────────────────────────────────────── */
 
@@ -14,8 +19,8 @@ type Tab = 'todos' | 'ingresos' | 'gastos'
 
 /* ── Helpers ───────────────────────────────────────────── */
 
-const fmtCOP = (n: number) =>
-  n.toLocaleString('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 })
+const fmtUSD = (n: number) =>
+  `$ ${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
 /* ── Modal ─────────────────────────────────────────────── */
 
@@ -109,7 +114,7 @@ function NewTxModal({
 
           {/* Monto */}
           <div>
-            <label className="mb-1 block text-xs font-medium text-omega-dark/60 dark:text-clinical-white/40">Monto (COP)</label>
+            <label className="mb-1 block text-xs font-medium text-omega-dark/60 dark:text-clinical-white/40">Monto (USD)</label>
             <input
               type="number"
               required
@@ -156,10 +161,13 @@ function NewTxModal({
 
 /* ── Main component ────────────────────────────────────── */
 
+type View = 'resumen' | 'terminal' | 'gastos'
+
 export default function Finanzas() {
-  const { transactions, setTransactions } = useData()
+  const { transactions, addTransaction } = useData()
   const [tab, setTab] = useState<Tab>('todos')
   const [modalOpen, setModalOpen] = useState(false)
+  const [view, setView] = useState<View>('resumen')
 
   const totals = useMemo(() => {
     const ingresos = transactions.filter((t) => t.tipo === 'ingreso').reduce((s, t) => s + t.monto, 0)
@@ -174,7 +182,7 @@ export default function Finanzas() {
   }, [transactions, tab])
 
   function handleSave(tx: Omit<Transaction, 'id'>) {
-    setTransactions((prev) => [{ ...tx, id: Date.now() }, ...prev])
+    addTransaction(tx)
     setModalOpen(false)
   }
 
@@ -194,15 +202,61 @@ export default function Finanzas() {
             Gestión de ingresos y gastos
           </p>
         </div>
-        <button
-          onClick={() => setModalOpen(true)}
-          className="flex items-center gap-2 rounded-lg bg-beta-mint px-4 py-2 text-sm font-semibold text-omega-dark shadow-md shadow-beta-mint/20 transition-all hover:bg-beta-mint/80 hover:shadow-lg hover:shadow-beta-mint/25 active:scale-[0.97]"
-        >
-          <Plus size={18} />
-          Registrar Movimiento
-        </button>
+        <div className="flex items-center gap-2">
+          {/* View toggle */}
+          <div className="flex gap-1 rounded-lg border border-omega-violet/20 p-0.5 dark:border-clinical-white/10">
+            <button
+              onClick={() => setView('resumen')}
+              className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                view === 'resumen'
+                  ? 'bg-omega-violet/10 text-omega-dark dark:bg-beta-mint/10 dark:text-beta-mint'
+                  : 'text-omega-dark/40 hover:text-omega-dark dark:text-clinical-white/40 dark:hover:text-clinical-white'
+              }`}
+            >
+              <LayoutGrid size={14} /> Resumen
+            </button>
+            <button
+              onClick={() => setView('terminal')}
+              className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                view === 'terminal'
+                  ? 'bg-omega-violet/10 text-omega-dark dark:bg-beta-mint/10 dark:text-beta-mint'
+                  : 'text-omega-dark/40 hover:text-omega-dark dark:text-clinical-white/40 dark:hover:text-clinical-white'
+              }`}
+            >
+              <Terminal size={14} /> POS
+            </button>
+            <button
+              onClick={() => setView('gastos')}
+              className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                view === 'gastos'
+                  ? 'bg-omega-violet/10 text-omega-dark dark:bg-beta-mint/10 dark:text-beta-mint'
+                  : 'text-omega-dark/40 hover:text-omega-dark dark:text-clinical-white/40 dark:hover:text-clinical-white'
+              }`}
+            >
+              <Receipt size={14} /> Gastos
+            </button>
+          </div>
+
+          {view === 'resumen' && (
+            <button
+              onClick={() => setModalOpen(true)}
+              className="flex items-center gap-2 rounded-lg bg-beta-mint px-4 py-2 text-sm font-semibold text-omega-dark shadow-md shadow-beta-mint/20 transition-all hover:bg-beta-mint/80 hover:shadow-lg hover:shadow-beta-mint/25 active:scale-[0.97]"
+            >
+              <Plus size={18} />
+              Registrar Movimiento
+            </button>
+          )}
+        </div>
       </div>
 
+      {/* POS Terminal View */}
+      {view === 'terminal' && <FinancialTerminal />}
+
+      {/* Expense Tracker View */}
+      {view === 'gastos' && <ExpenseTracker />}
+
+      {/* Summary View */}
+      {view === 'resumen' && (<>
       {/* Summary cards */}
       <div className="grid gap-5 sm:grid-cols-3">
         {summaryCards.map(({ label, value, icon: Icon, color }) => (
@@ -217,7 +271,7 @@ export default function Finanzas() {
                   {label}
                 </p>
                 <p className={`mt-2 text-2xl font-bold ${color}`}>
-                  {fmtCOP(value)}
+                  {fmtUSD(value)}
                 </p>
               </div>
               <div className="rounded-lg bg-omega-violet/10 p-2.5 dark:bg-omega-violet/25">
@@ -288,7 +342,7 @@ export default function Finanzas() {
                         : 'text-alert-red'
                     }`}
                   >
-                    {t.tipo === 'ingreso' ? '+' : '-'}{fmtCOP(t.monto)}
+                    {t.tipo === 'ingreso' ? '+' : '-'}{fmtUSD(t.monto)}
                   </td>
                 </tr>
               ))}
@@ -304,6 +358,8 @@ export default function Finanzas() {
           </table>
         </div>
       </div>
+
+      </>)}
 
       {/* Modal */}
       {modalOpen && <NewTxModal onClose={() => setModalOpen(false)} onSave={handleSave} />}

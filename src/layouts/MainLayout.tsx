@@ -27,11 +27,13 @@ import {
   ChevronDown,
   Calculator,
   UtensilsCrossed,
+  Bell,
   type LucideIcon,
 } from 'lucide-react'
 import { Toaster, toast } from 'sonner'
 import { useTheme } from '../context/ThemeContext'
 import { useClinic, type ClinicType } from '../context/ClinicContext'
+import BetaAssistant from '../components/BetaAssistant'
 
 /* ── Nav item type ───────────────────────────────────── */
 
@@ -61,6 +63,7 @@ const specialtyItems: Record<ClinicType, NavItem[]> = {
   dental: [
     { to: '/odontograma', label: 'Odontograma', icon: SmilePlus },
     { to: '/presupuestos', label: 'Presupuestos', icon: DollarSign },
+    { to: '/lab-dental', label: 'Lab Tracker', icon: Package },
   ],
   pediatrics: [
     { to: '/crecimiento', label: 'Crecimiento', icon: TrendingUp },
@@ -85,6 +88,7 @@ const QUICK_SWITCH: { type: ClinicType; label: string; icon: LucideIcon }[] = [
 
 const sharedItems: NavItem[] = [
   { to: '/telemedicina', label: 'Telemedicina', icon: Video },
+  { to: '/recordatorios', label: 'Recordatorios', icon: Bell },
   { to: '/reportes-rips', label: 'Reportes RIPS', icon: FileBarChart },
   { to: '/inventario', label: 'Inventario', icon: Package },
   { to: '/tareas', label: 'Tareas', icon: ClipboardCheck },
@@ -269,6 +273,8 @@ export default function MainLayout() {
         <main className="flex-1 overflow-y-auto bg-clinical-white p-6 dark:bg-omega-abyss">
           <Outlet />
         </main>
+
+        <BetaAssistant />
 
         <Toaster
           theme="dark"

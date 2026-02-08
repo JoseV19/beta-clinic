@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { jsPDF } from 'jspdf'
-import { Plus, Trash2, Printer, Pill } from 'lucide-react'
+import { Plus, Trash2, Printer, Pill, Zap, ClipboardList } from 'lucide-react'
 import { useSettings, type ClinicProfile } from '../context/SettingsContext'
+import SmartPrescription from '../components/SmartPrescription'
 
 /* ── Types ─────────────────────────────────────────────── */
 
@@ -169,6 +170,7 @@ function generatePrescriptionPDF(
 
 export default function Recetas() {
   const { clinic } = useSettings()
+  const [mode, setMode] = useState<'smart' | 'classic'>('smart')
   const [paciente, setPaciente] = useState(pacientes[0])
   const [medicamentos, setMedicamentos] = useState<Medicamento[]>([])
 
@@ -214,17 +216,50 @@ export default function Recetas() {
             Prescripción y generación de recetas oficiales
           </p>
         </div>
-        <button
-          onClick={handlePrint}
-          disabled={medicamentos.length === 0}
-          className="flex items-center gap-2 rounded-lg bg-beta-mint px-5 py-2.5 text-sm font-bold text-omega-dark shadow-md shadow-beta-mint/20 transition-all hover:bg-beta-mint/80 hover:shadow-lg hover:shadow-beta-mint/25 active:scale-[0.97] disabled:opacity-50 disabled:shadow-none"
-        >
-          <Printer size={18} />
-          Imprimir Receta Oficial
-        </button>
+        <div className="flex items-center gap-2">
+          {/* Mode toggle */}
+          <div className="flex overflow-hidden rounded-lg border border-omega-violet/20 dark:border-clinical-white/10">
+            <button
+              onClick={() => setMode('smart')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold transition-colors ${
+                mode === 'smart'
+                  ? 'bg-omega-violet/10 text-omega-violet dark:bg-beta-mint/10 dark:text-beta-mint'
+                  : 'text-omega-dark/50 hover:bg-omega-violet/5 dark:text-clinical-white/40 dark:hover:bg-clinical-white/5'
+              }`}
+            >
+              <Zap size={13} />
+              Smart
+            </button>
+            <button
+              onClick={() => setMode('classic')}
+              className={`flex items-center gap-1.5 border-l border-omega-violet/20 px-3 py-1.5 text-xs font-semibold transition-colors dark:border-clinical-white/10 ${
+                mode === 'classic'
+                  ? 'bg-omega-violet/10 text-omega-violet dark:bg-beta-mint/10 dark:text-beta-mint'
+                  : 'text-omega-dark/50 hover:bg-omega-violet/5 dark:text-clinical-white/40 dark:hover:bg-clinical-white/5'
+              }`}
+            >
+              <ClipboardList size={13} />
+              Clásico
+            </button>
+          </div>
+          {mode === 'classic' && (
+            <button
+              onClick={handlePrint}
+              disabled={medicamentos.length === 0}
+              className="flex items-center gap-2 rounded-lg bg-beta-mint px-5 py-2.5 text-sm font-bold text-omega-dark shadow-md shadow-beta-mint/20 transition-all hover:bg-beta-mint/80 hover:shadow-lg hover:shadow-beta-mint/25 active:scale-[0.97] disabled:opacity-50 disabled:shadow-none"
+            >
+              <Printer size={18} />
+              Imprimir
+            </button>
+          )}
+        </div>
       </div>
 
-      {/* Patient selector */}
+      {/* Smart mode */}
+      {mode === 'smart' && <SmartPrescription />}
+
+      {/* Classic mode */}
+      {mode === 'classic' && (<>
       <div className="rounded-xl border border-omega-violet/20 bg-white p-5 dark:border-clinical-white/10 dark:bg-omega-surface">
         <label className="mb-1 block text-xs font-medium text-omega-dark/60 dark:text-clinical-white/40">
           Paciente
@@ -380,6 +415,7 @@ export default function Recetas() {
           </p>
         </div>
       )}
+      </>)}
     </div>
   )
 }

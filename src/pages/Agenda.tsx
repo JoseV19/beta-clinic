@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
-import { ChevronLeft, ChevronRight, Plus } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Plus, LayoutGrid, Calendar as CalendarIcon } from 'lucide-react'
 import { useData } from '../context/DataContext'
+import CalendarWidget from '../components/CalendarWidget'
 
 /* ── Types ─────────────────────────────────────────────── */
 
@@ -100,6 +101,7 @@ function WaIcon({ size = 14 }: { size?: number }) {
 
 export default function Agenda() {
   const { patients } = useData()
+  const [view, setView] = useState<'grid' | 'calendar'>('grid')
   const [weekOffset, setWeekOffset] = useState(0)
   const dates = useMemo(() => getWeekDates(weekOffset), [weekOffset])
   const appointments = useMemo(() => buildMockAppointments(dates), [dates])
@@ -139,104 +141,139 @@ export default function Agenda() {
         </div>
 
         <div className="flex items-center gap-2">
-          <button
+          {/* View toggle */}
+          <div className="flex overflow-hidden rounded-lg border border-omega-violet/20 dark:border-clinical-white/10">
+            <button
+              onClick={() => setView('grid')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold transition-colors ${
+                view === 'grid'
+                  ? 'bg-omega-violet/10 text-omega-violet dark:bg-beta-mint/10 dark:text-beta-mint'
+                  : 'text-omega-dark/50 hover:bg-omega-violet/5 dark:text-clinical-white/40 dark:hover:bg-clinical-white/5'
+              }`}
+            >
+              <LayoutGrid size={13} />
+              Grid
+            </button>
+            <button
+              onClick={() => setView('calendar')}
+              className={`flex items-center gap-1.5 border-l border-omega-violet/20 px-3 py-1.5 text-xs font-semibold transition-colors dark:border-clinical-white/10 ${
+                view === 'calendar'
+                  ? 'bg-omega-violet/10 text-omega-violet dark:bg-beta-mint/10 dark:text-beta-mint'
+                  : 'text-omega-dark/50 hover:bg-omega-violet/5 dark:text-clinical-white/40 dark:hover:bg-clinical-white/5'
+              }`}
+            >
+              <CalendarIcon size={13} />
+              Calendario
+            </button>
+          </div>
+
+          {view === 'grid' && <button
             onClick={() => setWeekOffset(0)}
             className="rounded-lg border border-omega-violet/20 px-3 py-1.5 text-xs font-medium text-omega-dark transition-colors hover:bg-omega-violet/5 dark:border-clinical-white/10 dark:text-clinical-white dark:hover:bg-clinical-white/5"
           >
             Hoy
-          </button>
-          <button
-            onClick={() => setWeekOffset((w) => w - 1)}
-            className="rounded-lg border border-omega-violet/20 p-1.5 text-omega-dark/60 transition-colors hover:bg-omega-violet/5 dark:border-clinical-white/10 dark:text-clinical-white/60 dark:hover:bg-clinical-white/5"
-          >
-            <ChevronLeft size={18} />
-          </button>
-          <button
-            onClick={() => setWeekOffset((w) => w + 1)}
-            className="rounded-lg border border-omega-violet/20 p-1.5 text-omega-dark/60 transition-colors hover:bg-omega-violet/5 dark:border-clinical-white/10 dark:text-clinical-white/60 dark:hover:bg-clinical-white/5"
-          >
-            <ChevronRight size={18} />
-          </button>
+          </button>}
+          {view === 'grid' && <>
+            <button
+              onClick={() => setWeekOffset((w) => w - 1)}
+              className="rounded-lg border border-omega-violet/20 p-1.5 text-omega-dark/60 transition-colors hover:bg-omega-violet/5 dark:border-clinical-white/10 dark:text-clinical-white/60 dark:hover:bg-clinical-white/5"
+            >
+              <ChevronLeft size={18} />
+            </button>
+            <button
+              onClick={() => setWeekOffset((w) => w + 1)}
+              className="rounded-lg border border-omega-violet/20 p-1.5 text-omega-dark/60 transition-colors hover:bg-omega-violet/5 dark:border-clinical-white/10 dark:text-clinical-white/60 dark:hover:bg-clinical-white/5"
+            >
+              <ChevronRight size={18} />
+            </button>
+          </>}
         </div>
       </div>
 
-      {/* Calendar grid */}
-      <div className="flex-1 overflow-auto rounded-xl border border-omega-violet/20 bg-white dark:border-clinical-white/10 dark:bg-omega-surface">
-        <table className="w-full border-collapse text-xs">
-          <thead className="sticky top-0 z-10">
-            <tr>
-              <th className="w-16 border-b border-omega-violet/10 bg-omega-violet px-2 py-3 text-left text-[10px] font-semibold uppercase tracking-wider text-clinical-white/80">
-                Hora
-              </th>
-              {dates.map((d, i) => {
-                const isToday = d === new Date().toISOString().split('T')[0]
-                return (
-                  <th
-                    key={d}
-                    className="border-b border-l border-omega-violet/10 bg-omega-violet px-2 py-3 text-center font-semibold text-clinical-white"
-                  >
-                    <span className="block text-[10px] uppercase tracking-wider text-clinical-white/70">
-                      {DAY_LABELS[i]}
-                    </span>
-                    <span
-                      className={`mt-0.5 inline-flex h-7 w-7 items-center justify-center rounded-full text-sm ${
-                        isToday ? 'bg-beta-mint text-omega-dark font-bold' : ''
-                      }`}
-                    >
-                      {formatDayHeader(d)}
-                    </span>
-                  </th>
-                )
-              })}
-            </tr>
-          </thead>
+      {/* Calendar widget (react-big-calendar) */}
+      {view === 'calendar' && (
+        <CalendarWidget />
+      )}
 
-          <tbody>
-            {HOURS.map((hour) => (
-              <tr key={hour} className="group">
-                <td className="border-b border-omega-violet/5 bg-clinical-white px-2 py-3 text-right align-top text-[11px] font-medium text-omega-dark/40 dark:border-clinical-white/5 dark:bg-omega-abyss dark:text-clinical-white/30">
-                  {hour.toString().padStart(2, '0')}:00
-                </td>
-                {dates.map((date) => {
-                  const key = `${date}-${hour}`
-                  const items = byDayHour.get(key) ?? []
+      {/* Custom grid */}
+      {view === 'grid' && (
+        <div className="flex-1 overflow-auto rounded-xl border border-omega-violet/20 bg-white dark:border-clinical-white/10 dark:bg-omega-surface">
+          <table className="w-full border-collapse text-xs">
+            <thead className="sticky top-0 z-10">
+              <tr>
+                <th className="w-16 border-b border-omega-violet/10 bg-omega-violet px-2 py-3 text-left text-[10px] font-semibold uppercase tracking-wider text-clinical-white/80">
+                  Hora
+                </th>
+                {dates.map((d, i) => {
+                  const isToday = d === new Date().toISOString().split('T')[0]
                   return (
-                    <td
-                      key={key}
-                      className="h-16 border-b border-l border-omega-violet/5 p-1 align-top transition-colors hover:bg-omega-violet/[0.02] dark:border-clinical-white/5 dark:hover:bg-clinical-white/5"
+                    <th
+                      key={d}
+                      className="border-b border-l border-omega-violet/10 bg-omega-violet px-2 py-3 text-center font-semibold text-clinical-white"
                     >
-                      {items.map((a) => (
-                        <div
-                          key={a.id}
-                          className={`group/card relative mb-1 cursor-default rounded-md px-1.5 py-1 leading-tight ${
-                            a.estado === 'confirmada'
-                              ? 'bg-beta-mint/20 text-emerald-800 dark:text-beta-mint'
-                              : 'bg-gray-100 text-gray-600 dark:bg-clinical-white/10 dark:text-clinical-white/60'
-                          }`}
-                        >
-                          <span className="block truncate pr-5 font-semibold">
-                            {a.paciente}
-                          </span>
-                          <span className="block truncate text-[10px] opacity-70">
-                            {a.hora} · {a.tipo}
-                          </span>
-                          <button
-                            onClick={() => handleWhatsAppReminder(a)}
-                            title="Recordatorio por WhatsApp"
-                            className="absolute right-1 top-1 rounded p-0.5 text-[#25D366] opacity-0 transition-opacity hover:bg-black/10 group-hover/card:opacity-100"
-                          >
-                            <WaIcon size={12} />
-                          </button>
-                        </div>
-                      ))}
-                    </td>
+                      <span className="block text-[10px] uppercase tracking-wider text-clinical-white/70">
+                        {DAY_LABELS[i]}
+                      </span>
+                      <span
+                        className={`mt-0.5 inline-flex h-7 w-7 items-center justify-center rounded-full text-sm ${
+                          isToday ? 'bg-beta-mint text-omega-dark font-bold' : ''
+                        }`}
+                      >
+                        {formatDayHeader(d)}
+                      </span>
+                    </th>
                   )
                 })}
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+
+            <tbody>
+              {HOURS.map((hour) => (
+                <tr key={hour} className="group">
+                  <td className="border-b border-omega-violet/5 bg-clinical-white px-2 py-3 text-right align-top text-[11px] font-medium text-omega-dark/40 dark:border-clinical-white/5 dark:bg-omega-abyss dark:text-clinical-white/30">
+                    {hour.toString().padStart(2, '0')}:00
+                  </td>
+                  {dates.map((date) => {
+                    const key = `${date}-${hour}`
+                    const items = byDayHour.get(key) ?? []
+                    return (
+                      <td
+                        key={key}
+                        className="h-16 border-b border-l border-omega-violet/5 p-1 align-top transition-colors hover:bg-omega-violet/[0.02] dark:border-clinical-white/5 dark:hover:bg-clinical-white/5"
+                      >
+                        {items.map((a) => (
+                          <div
+                            key={a.id}
+                            className={`group/card relative mb-1 cursor-default rounded-md px-1.5 py-1 leading-tight ${
+                              a.estado === 'confirmada'
+                                ? 'bg-beta-mint/20 text-emerald-800 dark:text-beta-mint'
+                                : 'bg-gray-100 text-gray-600 dark:bg-clinical-white/10 dark:text-clinical-white/60'
+                            }`}
+                          >
+                            <span className="block truncate pr-5 font-semibold">
+                              {a.paciente}
+                            </span>
+                            <span className="block truncate text-[10px] opacity-70">
+                              {a.hora} · {a.tipo}
+                            </span>
+                            <button
+                              onClick={() => handleWhatsAppReminder(a)}
+                              title="Recordatorio por WhatsApp"
+                              className="absolute right-1 top-1 rounded p-0.5 text-[#25D366] opacity-0 transition-opacity hover:bg-black/10 group-hover/card:opacity-100"
+                            >
+                              <WaIcon size={12} />
+                            </button>
+                          </div>
+                        ))}
+                      </td>
+                    )
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {/* FAB — Nueva Cita */}
       <button
