@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, type ReactNode } from 'react'
 import { usePersistentState } from '../hooks/usePersistentState'
 import { THEME_CONFIG } from '../data/themeConfig'
+import { useTheme } from './ThemeContext'
 
 /* ── Types ─────────────────────────────────────────────── */
 
@@ -16,6 +17,13 @@ export interface ClinicContextValue {
 
 const ClinicCtx = createContext<ClinicContextValue | undefined>(undefined)
 
+/* ── Monochrome palettes ──────────────────────────────── */
+
+const MONO_PALETTE = {
+  dark: { primary: '#9CA3AF', accent: '#E5E7EB' },
+  light: { primary: '#1F2937', accent: '#111827' },
+} as const
+
 /* ── Provider ──────────────────────────────────────────── */
 
 export function ClinicProvider({ children }: { children: ReactNode }) {
@@ -23,13 +31,20 @@ export function ClinicProvider({ children }: { children: ReactNode }) {
     'beta_clinic_type',
     null,
   )
+  const { monochrome, theme } = useTheme()
 
   // Inject specialty theme CSS variables
   useEffect(() => {
-    const palette = THEME_CONFIG[clinicType ?? 'general']
-    document.documentElement.style.setProperty('--color-primary', palette.primary)
-    document.documentElement.style.setProperty('--color-accent', palette.accent)
-  }, [clinicType])
+    if (monochrome) {
+      const palette = MONO_PALETTE[theme]
+      document.documentElement.style.setProperty('--color-primary', palette.primary)
+      document.documentElement.style.setProperty('--color-accent', palette.accent)
+    } else {
+      const palette = THEME_CONFIG[clinicType ?? 'general']
+      document.documentElement.style.setProperty('--color-primary', palette.primary)
+      document.documentElement.style.setProperty('--color-accent', palette.accent)
+    }
+  }, [clinicType, monochrome, theme])
 
   const value: ClinicContextValue = {
     clinicType,

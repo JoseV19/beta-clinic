@@ -12,8 +12,6 @@ import type { Patient } from '../data/patients'
 import {
   dbPatientToFrontend,
   frontendPatientToDb,
-  dbFinanceToFrontend,
-  frontendTransactionToDb,
   dbAppointmentToFrontend,
 } from '../services/mappers'
 import {
@@ -22,30 +20,9 @@ import {
   updatePatient as svcUpdatePatient,
   deletePatient as svcDeletePatient,
 } from '../services/patientService'
-import {
-  fetchFinance as svcFetchFinance,
-  createFinance as svcCreateFinance,
-  voidFinance as svcVoidFinance,
-} from '../services/financeService'
 import { fetchAppointments as svcFetchAppointments } from '../services/appointmentService'
 
 /* ── Types ─────────────────────────────────────────────── */
-
-export type MetodoPago = 'efectivo' | 'tarjeta' | 'transferencia' | 'seguro'
-export type CategoriaGasto = 'alquiler' | 'servicios' | 'nomina' | 'insumos' | 'mantenimiento' | 'marketing' | 'otro'
-
-export interface Transaction {
-  id: number
-  fecha: string
-  concepto: string
-  monto: number
-  tipo: 'ingreso' | 'gasto'
-  metodo?: MetodoPago
-  paciente?: string
-  anulado?: boolean
-  categoria?: CategoriaGasto
-  comprobante?: string
-}
 
 export interface Appointment {
   patient: string
@@ -61,15 +38,11 @@ interface DataContextValue {
   setPatients: React.Dispatch<React.SetStateAction<Patient[]>>
   appointments: Appointment[]
   setAppointments: React.Dispatch<React.SetStateAction<Appointment[]>>
-  transactions: Transaction[]
-  setTransactions: React.Dispatch<React.SetStateAction<Transaction[]>>
 
   /* Async CRUD */
   addPatient: (data: Omit<Patient, 'id'>) => Promise<void>
   updatePatient: (updated: Patient) => Promise<void>
   deletePatient: (id: number) => Promise<void>
-  addTransaction: (data: Omit<Transaction, 'id'>) => Promise<void>
-  voidTransaction: (id: number) => Promise<void>
   refresh: () => Promise<void>
 
   loading: boolean
@@ -83,9 +56,31 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   const [patients, setPatients] = useState<Patient[]>([])
   const [appointments, setAppointments] = useState<Appointment[]>([])
-  const [transactions, setTransactions] = useState<Transaction[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+
+  /* ── Fetch all data ────────────────────────────────── */
+
+  /* ── localStorage helpers ─────────────────────────────── */
+
+  const LS_PATIENTS = 'beta_patients'
+  const LS_APPOINTMENTS = 'beta_appointments'
+
+  const loadFromLocalStorage = useCallback(() => {
+    try {
+      const p = localStorage.getItem(LS_PATIENTS)
+      const a = localStorage.getItem(LS_APPOINTMENTS)
+      if (p) setPatients(JSON.parse(p))
+      if (a) setAppointments(JSON.parse(a))
+    } catch { /* ignore parse errors */ }
+  }, [])
+
+  const saveToLocalStorage = useCallback((p: Patient[], a: Appointment[]) => {
+    try {
+      localStorage.setItem(LS_PATIENTS, JSON.stringify(p))
+      localStorage.setItem(LS_APPOINTMENTS, JSON.stringify(a))
+    } catch { /* ignore quota errors */ }
+  }, [])
 
   /* ── Fetch all data ────────────────────────────────── */
 
@@ -96,29 +91,29 @@ export function DataProvider({ children }: { children: ReactNode }) {
     setError(null)
 
     try {
-      const [dbPatients, dbFinance, dbAppointments] = await Promise.all([
+      const [dbPatients, dbAppointments] = await Promise.all([
         svcFetchPatients(supabase),
-        svcFetchFinance(supabase),
         svcFetchAppointments(supabase),
       ])
 
-      setPatients(dbPatients.map(dbPatientToFrontend))
-      setTransactions(dbFinance.map(dbFinanceToFrontend))
-      setAppointments(dbAppointments.map(dbAppointmentToFrontend))
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Error al cargar datos'
-      setError(msg)
-      toast.error(msg)
+      const frontendPatients = dbPatients.map(dbPatientToFrontend)
+      const frontendAppts = dbAppointments.map(dbAppointmentToFrontend)
+      setPatients(frontendPatients)
+      setAppointments(frontendAppts)
+      saveToLocalStorage(frontendPatients, frontendAppts)
+    } catch {
+      // Supabase unavailable → fallback to localStorage
+      console.warn('[DataContext] Supabase unavailable, loading from localStorage')
+      loadFromLocalStorage()
     } finally {
       setLoading(false)
     }
-  }, [supabase, profile])
+  }, [supabase, profile, saveToLocalStorage, loadFromLocalStorage])
 
   useEffect(() => {
     if (authLoading) return
     if (!profile) {
       setPatients([])
-      setTransactions([])
       setAppointments([])
       setLoading(false)
       return
@@ -162,31 +157,6 @@ export function DataProvider({ children }: { children: ReactNode }) {
     }
   }, [supabase])
 
-  /* ── Transaction CRUD ──────────────────────────────── */
-
-  const addTransaction = useCallback(async (data: Omit<Transaction, 'id'>) => {
-    try {
-      const dbData = frontendTransactionToDb(data)
-      const created = await svcCreateFinance(supabase, dbData)
-      setTransactions((prev) => [dbFinanceToFrontend(created), ...prev])
-      toast.success('Movimiento registrado')
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Error al registrar movimiento')
-    }
-  }, [supabase])
-
-  const voidTransaction = useCallback(async (id: number) => {
-    try {
-      await svcVoidFinance(supabase, id)
-      setTransactions((prev) =>
-        prev.map((t) => (t.id === id ? { ...t, anulado: true } : t)),
-      )
-      toast.success('Movimiento anulado')
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Error al anular movimiento')
-    }
-  }, [supabase])
-
   /* ── Value ─────────────────────────────────────────── */
 
   return (
@@ -196,13 +166,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
         setPatients,
         appointments,
         setAppointments,
-        transactions,
-        setTransactions,
         addPatient,
         updatePatient: updatePatientFn,
         deletePatient: deletePatientFn,
-        addTransaction,
-        voidTransaction,
         refresh: fetchAll,
         loading,
         error,

@@ -1,8 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion, AnimatePresence, type Variants } from 'framer-motion'
 import { useUser, useClerk } from '@clerk/clerk-react'
 import { jsPDF } from 'jspdf'
-import QRCode from 'react-qr-code'
 import { toast } from 'sonner'
 import {
   Home,
@@ -29,15 +28,28 @@ import {
   Shield,
   LogOut,
   ChevronRight,
+  ChevronLeft,
   Fingerprint,
-  ScanLine,
   CheckCircle2,
   X,
   CalendarPlus,
-  ChevronLeft,
+  Lock,
+  ShieldCheck,
+  Sparkles,
+  MessageCircle,
+  Palette,
 } from 'lucide-react'
 import { useData, type Appointment } from '../context/DataContext'
 import { useSettings } from '../context/SettingsContext'
+import { useTheme } from '../context/ThemeContext'
+import {
+  SPECIALTY_DATA,
+  ALL_SLOTS,
+  getOccupied,
+  getNext14Days,
+  capitalize,
+  type SpecialtyConfig,
+} from '../data/specialties'
 
 /* ── Types ─────────────────────────────────────────────── */
 
@@ -50,7 +62,7 @@ const TAB_CONFIG: { key: Tab; label: string; icon: typeof Home }[] = [
   { key: 'perfil', label: 'Perfil', icon: UserCircle },
 ]
 
-/* ── Slide variants ───────────────────────────────────── */
+/* ── Animation variants ────────────────────────────────── */
 
 const tabIdx = (t: Tab) => TAB_CONFIG.findIndex((c) => c.key === t)
 
@@ -64,7 +76,21 @@ const slideVariants = {
   exit: (d: number) => ({ x: d > 0 ? '-40%' : '40%', opacity: 0 }),
 }
 
-/* ── Countdown hook ───────────────────────────────────── */
+const fadeUp: Variants = {
+  hidden: { opacity: 0, y: 20 },
+  visible: (i: number) => ({
+    opacity: 1,
+    y: 0,
+    transition: { delay: i * 0.08, duration: 0.45, ease: [0.22, 1, 0.36, 1] },
+  }),
+}
+
+const stagger: Variants = {
+  hidden: {},
+  visible: { transition: { staggerChildren: 0.08 } },
+}
+
+/* ── Countdown hook ────────────────────────────────────── */
 
 function useCountdown(targetMs: number) {
   const [now, setNow] = useState(() => Date.now())
@@ -84,7 +110,7 @@ function useCountdown(targetMs: number) {
   }
 }
 
-/* ── Mock helpers ─────────────────────────────────────── */
+/* ── Mock data ─────────────────────────────────────────── */
 
 function getNextAppointment() {
   const date = new Date()
@@ -105,8 +131,6 @@ function getNextAppointment() {
   }
 }
 
-/* ── Mock health timeline ─────────────────────────────── */
-
 interface TimelineEvent {
   id: number
   fecha: string
@@ -124,8 +148,6 @@ const mockTimeline: TimelineEvent[] = [
   { id: 5, fecha: '2025-12-10', titulo: 'Consulta: Cefalea tensional', doctor: 'Dr. Rodríguez', tipo: 'consulta', detalle: 'Se recetó Acetaminofén 500 mg.' },
   { id: 6, fecha: '2025-11-05', titulo: 'Laboratorio: Perfil Lipídico', doctor: 'Laboratorio Central', tipo: 'laboratorio', detalle: 'Colesterol total: 195 mg/dL. Triglicéridos: 148 mg/dL.' },
 ]
-
-/* ── Mock prescriptions ───────────────────────────────── */
 
 interface Medicamento {
   nombre: string
@@ -168,8 +190,6 @@ const prescriptions: Receta[] = [
   },
 ]
 
-/* ── Mock vaccination data ────────────────────────────── */
-
 const vaccinations = [
   { nombre: 'COVID-19 (3ra dosis)', fecha: '2025-06-15', aplicada: true },
   { nombre: 'Influenza 2025', fecha: '2025-12-20', aplicada: true },
@@ -177,35 +197,24 @@ const vaccinations = [
   { nombre: 'Hepatitis B (2da dosis)', fecha: '2026-04-10', aplicada: false },
 ]
 
-/* ── Health profile ───────────────────────────────────── */
-
-const healthData = {
+const healthDataDefaults = {
   tipoSangre: 'O+',
   alergias: ['Penicilina', 'Sulfas'],
   seguro: 'Seguros G&T',
-  frecuenciaCardiaca: '72 bpm',
+  fechaNacimiento: '1990-05-15',
+  genero: 'Masculino',
+  contactoEmergencia: '',
+  telefono: '',
 }
 
-/* ── Booking specialties ──────────────────────────────── */
-
-const bookingSpecialties = ['Medicina General', 'Cardiología', 'Dermatología', 'Pediatría', 'Ginecología']
-
-const doctorBySpecialty: Record<string, string> = {
-  'Medicina General': 'Dr. Rodríguez',
-  'Cardiología': 'Dra. Martínez',
-  'Dermatología': 'Dr. Herrera',
-  'Pediatría': 'Dra. López',
-  'Ginecología': 'Dra. Martínez',
-}
-
-const allSlots = [
-  '08:00 AM', '08:30 AM', '09:00 AM', '09:30 AM',
-  '10:00 AM', '10:30 AM', '11:00 AM', '11:30 AM',
-  '14:00 PM', '14:30 PM', '15:00 PM', '15:30 PM',
-  '16:00 PM', '16:30 PM',
+const healthTips = [
+  'Recuerda beber al menos 8 vasos de agua al día y mantener tus controles médicos al día.',
+  'Caminar 30 minutos al día reduce el riesgo cardiovascular en un 35%.',
+  'Dormir entre 7-9 horas mejora tu sistema inmunológico y concentración.',
+  'Una dieta rica en frutas y verduras aporta los micronutrientes esenciales.',
 ]
 
-/* ── PDF generator ────────────────────────────────────── */
+/* ── PDF generator ─────────────────────────────────────── */
 
 const VIOLET = '#6A1B9A'
 const DARK = '#4A148C'
@@ -308,7 +317,7 @@ function generateRecetaPDF(rx: Receta, clinicName: string, clinicNit: string, cl
   doc.save(`Receta_${rx.fecha}_${rx.doctor.replace(/\s/g, '_')}.pdf`)
 }
 
-/* ── WhatsApp icon ────────────────────────────────────── */
+/* ── WhatsApp icon ─────────────────────────────────────── */
 
 function WaIcon({ size = 14 }: { size?: number }) {
   return (
@@ -322,12 +331,32 @@ function WaIcon({ size = 14 }: { size?: number }) {
    MAIN COMPONENT
    ══════════════════════════════════════════════════════════ */
 
+export interface PatientHealthData {
+  tipoSangre: string
+  alergias: string[]
+  seguro: string
+  fechaNacimiento: string
+  genero: string
+  contactoEmergencia: string
+  telefono: string
+}
+
+function loadHealthData(): PatientHealthData {
+  try {
+    const raw = localStorage.getItem('beta_patient_health')
+    if (raw) return JSON.parse(raw)
+  } catch { /* ignore */ }
+  return healthDataDefaults
+}
+
 export default function PatientPortal() {
   const { user } = useUser()
   const { signOut } = useClerk()
   const { clinic } = useSettings()
   const { appointments, setAppointments } = useData()
+  const { monochrome, toggleMonochrome } = useTheme()
 
+  const healthData = useMemo(() => loadHealthData(), [])
   const firstName = user?.firstName || 'Paciente'
   const [tab, setTab] = useState<Tab>('inicio')
   const [prevTab, setPrevTab] = useState<Tab>('inicio')
@@ -339,19 +368,46 @@ export default function PatientPortal() {
   }
 
   return (
-    <div className="flex min-h-dvh justify-center bg-zinc-950">
+    <div className="flex min-h-dvh justify-center bg-omega-abyss">
+      {/* Gradient orbs */}
+      <div
+        className="pointer-events-none fixed -left-32 -top-32 h-[400px] w-[400px] rounded-full bg-[#7C3AED] opacity-[0.12] blur-[120px]"
+        style={{ animation: 'float-orb 20s ease-in-out infinite' }}
+      />
+      <div
+        className="pointer-events-none fixed -bottom-32 -right-32 h-[350px] w-[350px] rounded-full bg-[#7FFFD4] opacity-[0.08] blur-[120px]"
+        style={{ animation: 'float-orb 25s ease-in-out infinite reverse' }}
+      />
+      <div
+        className="pointer-events-none fixed right-[10%] top-[40%] h-[250px] w-[250px] rounded-full bg-[#EC4899] opacity-[0.06] blur-[100px]"
+        style={{ animation: 'float-orb 18s ease-in-out infinite 5s' }}
+      />
+
       {/* Mobile app container */}
-      <div className="flex w-full max-w-md flex-col bg-zinc-900">
+      <div className="relative flex w-full max-w-md flex-col">
         {/* Header */}
-        <header className="flex items-center justify-between border-b border-zinc-800 px-5 py-3.5">
+        <header className="relative z-10 flex items-center justify-between border-b border-white/[0.06] bg-omega-abyss/70 px-5 py-3.5 backdrop-blur-xl">
           <div className="flex items-center gap-2.5">
             <img src="/beta-logo.png" alt="Beta Life" className="h-7 w-auto object-contain" />
-            <div className="h-4 w-px bg-zinc-700" />
-            <span className="text-xs font-bold tracking-wider text-zinc-500">BETA LIFE</span>
+            <div className="h-4 w-px bg-white/[0.08]" />
+            <span className="text-[10px] font-bold tracking-widest text-white/30">BETA LIFE</span>
           </div>
-          <p className="text-sm text-zinc-400">
-            Hola, <span className="font-semibold text-beta-mint">{firstName}</span>
-          </p>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={toggleMonochrome}
+              className={`flex h-8 w-8 items-center justify-center rounded-lg transition-all active:scale-90 ${
+                monochrome
+                  ? 'bg-white/10 text-white'
+                  : 'bg-white/[0.04] text-white/40'
+              }`}
+              title={monochrome ? 'Modo Color' : 'Blanco y Negro'}
+            >
+              <Palette size={16} />
+            </button>
+            <p className="text-sm text-white/50">
+              Hola, <span className="font-semibold text-beta-mint">{firstName}</span>
+            </p>
+          </div>
         </header>
 
         {/* Content area */}
@@ -372,6 +428,7 @@ export default function PatientPortal() {
                   clinic={clinic}
                   onGoToCitas={() => switchTab('citas')}
                   onGoToSalud={() => switchTab('salud')}
+                  onGoToPerfil={() => switchTab('perfil')}
                 />
               )}
               {tab === 'salud' && <TabSalud clinic={clinic} />}
@@ -382,13 +439,13 @@ export default function PatientPortal() {
                   userName={user?.fullName || user?.firstName || 'Paciente Portal'}
                 />
               )}
-              {tab === 'perfil' && <TabPerfil user={user} signOut={signOut} />}
+              {tab === 'perfil' && <TabPerfil user={user} signOut={signOut} healthData={healthData} />}
             </motion.div>
           </AnimatePresence>
         </main>
 
         {/* Bottom Navigation */}
-        <nav className="fixed bottom-0 left-1/2 w-full max-w-md -translate-x-1/2 border-t border-zinc-800 bg-zinc-900/95 backdrop-blur-md">
+        <nav className="fixed bottom-0 left-1/2 w-full max-w-md -translate-x-1/2 border-t border-white/[0.06] bg-omega-abyss/90 backdrop-blur-xl">
           <div className="flex items-center justify-around px-2 pb-1 pt-2">
             {TAB_CONFIG.map(({ key, label, icon: Icon }) => {
               const isActive = tab === key
@@ -397,13 +454,13 @@ export default function PatientPortal() {
                   key={key}
                   onClick={() => switchTab(key)}
                   className={`relative flex flex-col items-center gap-1 rounded-lg px-4 py-1.5 text-[10px] font-semibold transition-colors ${
-                    isActive ? 'text-beta-mint' : 'text-zinc-500 active:text-zinc-300'
+                    isActive ? 'text-beta-mint' : 'text-white/30 active:text-white/50'
                   }`}
                 >
                   {isActive && (
                     <motion.div
                       layoutId="tab-pill"
-                      className="absolute -top-2.5 h-[3px] w-6 rounded-full bg-beta-mint"
+                      className="absolute -top-2.5 h-[3px] w-6 rounded-full bg-beta-mint shadow-[0_0_8px_rgba(127,255,212,0.4)]"
                       transition={{ type: 'spring', stiffness: 400, damping: 28 }}
                     />
                   )}
@@ -427,48 +484,37 @@ function TabInicio({
   clinic,
   onGoToCitas,
   onGoToSalud,
+  onGoToPerfil,
 }: {
   clinic: { telefono: string; direccion: string }
   onGoToCitas: () => void
   onGoToSalud: () => void
+  onGoToPerfil: () => void
 }) {
   const appointment = useMemo(() => getNextAppointment(), [])
   const countdown = useCountdown(appointment.targetMs)
+  const tipIndex = useMemo(() => Math.floor(Math.random() * healthTips.length), [])
+
+  const profileCompletion = 65
 
   const quickActions = [
-    {
-      label: 'Agendar Cita',
-      icon: CalendarPlus,
-      color: 'bg-beta-mint/15 text-beta-mint',
-      action: onGoToCitas,
-    },
-    {
-      label: 'Mi Salud',
-      icon: HeartPulse,
-      color: 'bg-pink-500/15 text-pink-400',
-      action: onGoToSalud,
-    },
-    {
-      label: 'Llamar Clínica',
-      icon: Phone,
-      color: 'bg-emerald-500/15 text-emerald-400',
-      action: () => window.open(`tel:${clinic.telefono.replace(/\D/g, '')}`, '_self'),
-    },
-    {
-      label: 'Ubicación',
-      icon: MapPin,
-      color: 'bg-amber-500/15 text-amber-400',
-      action: () => window.open(`https://maps.google.com/?q=${encodeURIComponent(clinic.direccion)}`, '_blank'),
-    },
+    { label: 'Agendar Cita', icon: CalendarPlus, color: 'text-beta-mint', bg: 'bg-beta-mint/15', action: onGoToCitas },
+    { label: 'Mi Salud', icon: HeartPulse, color: 'text-pink-400', bg: 'bg-pink-500/15', action: onGoToSalud },
+    { label: 'Llamar Clínica', icon: Phone, color: 'text-emerald-400', bg: 'bg-emerald-500/15', action: () => window.open(`tel:${clinic.telefono.replace(/\D/g, '')}`, '_self') },
+    { label: 'Ubicación', icon: MapPin, color: 'text-amber-400', bg: 'bg-amber-500/15', action: () => window.open(`https://maps.google.com/?q=${encodeURIComponent(clinic.direccion)}`, '_blank') },
   ]
 
   return (
-    <div className="space-y-5">
+    <motion.div initial="hidden" animate="visible" variants={stagger} className="space-y-5">
       {/* Next Appointment Card */}
-      <div className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-800/50">
-        <div className="flex items-center gap-2 border-b border-zinc-700/50 px-4 py-3">
+      <motion.div
+        variants={fadeUp}
+        custom={0}
+        className="overflow-hidden rounded-2xl border border-white/[0.06] bg-gradient-to-br from-beta-mint/[0.04] to-transparent backdrop-blur-sm"
+      >
+        <div className="flex items-center gap-2 border-b border-white/[0.06] px-4 py-3">
           <CalendarClock size={16} className="text-beta-mint" />
-          <h2 className="text-sm font-bold text-zinc-200">Tu Próxima Cita</h2>
+          <h2 className="text-sm font-bold text-white">Tu Próxima Cita</h2>
         </div>
 
         <div className="p-4">
@@ -477,12 +523,12 @@ function TabInicio({
               <Stethoscope size={20} className="text-beta-mint" />
             </div>
             <div>
-              <p className="font-semibold text-zinc-100">{appointment.doctor}</p>
-              <p className="text-xs text-zinc-400">{appointment.especialidad}</p>
+              <p className="font-semibold text-white">{appointment.doctor}</p>
+              <p className="text-xs text-white/40">{appointment.especialidad}</p>
             </div>
           </div>
 
-          <div className="mt-3 flex items-center gap-4 text-xs text-zinc-400">
+          <div className="mt-3 flex items-center gap-4 text-xs text-white/40">
             <span className="flex items-center gap-1.5">
               <CalendarClock size={13} />
               {appointment.fechaDisplay} · {appointment.hora}
@@ -495,7 +541,7 @@ function TabInicio({
 
           {!countdown.passed && (
             <div className="mt-4">
-              <p className="mb-2 flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-zinc-500">
+              <p className="mb-2 flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-white/30">
                 <Clock size={12} />
                 Cuenta regresiva
               </p>
@@ -505,9 +551,9 @@ function TabInicio({
                   { value: countdown.hours, label: 'Horas' },
                   { value: countdown.minutes, label: 'Min' },
                 ].map(({ value, label }) => (
-                  <div key={label} className="rounded-xl bg-zinc-900 py-2.5 text-center">
+                  <div key={label} className="rounded-xl bg-white/[0.05] py-2.5 text-center">
                     <p className="text-2xl font-bold tabular-nums text-beta-mint">{value}</p>
-                    <p className="text-[10px] font-medium text-zinc-500">{label}</p>
+                    <p className="text-[10px] font-medium text-white/30">{label}</p>
                   </div>
                 ))}
               </div>
@@ -518,44 +564,107 @@ function TabInicio({
             <div className="mt-4">
               <button
                 onClick={onGoToCitas}
-                className="block w-full rounded-xl bg-beta-mint py-3 text-center text-sm font-bold text-zinc-900 transition-colors active:bg-beta-mint/80"
+                className="block w-full rounded-xl bg-beta-mint py-3 text-center text-sm font-bold text-omega-abyss shadow-[0_0_15px_rgba(127,255,212,0.2)] transition-all active:scale-[0.98]"
               >
                 Reservar Nueva Cita
               </button>
             </div>
           )}
         </div>
-      </div>
+      </motion.div>
 
       {/* Quick Actions */}
-      <div>
-        <h3 className="mb-3 text-xs font-bold uppercase tracking-wider text-zinc-500">
+      <motion.div variants={fadeUp} custom={1}>
+        <h3 className="mb-3 text-xs font-bold uppercase tracking-wider text-white/30">
           Accesos Rápidos
         </h3>
         <div className="grid grid-cols-2 gap-2.5">
-          {quickActions.map(({ label, icon: Icon, color, action }) => (
+          {quickActions.map(({ label, icon: Icon, color, bg, action }) => (
             <button
               key={label}
               onClick={action}
-              className="flex items-center gap-3 rounded-2xl border border-zinc-800 bg-zinc-800/30 p-3.5 text-left transition-colors active:bg-zinc-800"
+              className="flex items-center gap-3 rounded-2xl border border-white/[0.06] bg-white/[0.03] p-3.5 text-left backdrop-blur-sm transition-all active:bg-white/[0.08] active:scale-[0.98]"
             >
-              <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${color}`}>
-                <Icon size={20} />
+              <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${bg}`}>
+                <Icon size={20} className={color} />
               </div>
-              <span className="text-xs font-medium leading-tight text-zinc-300">{label}</span>
+              <span className="text-xs font-medium leading-tight text-white/70">{label}</span>
             </button>
           ))}
         </div>
-      </div>
+      </motion.div>
 
-      {/* Health tip */}
-      <div className="rounded-2xl border border-zinc-800 bg-gradient-to-br from-beta-mint/5 to-transparent p-4">
-        <p className="text-xs font-bold uppercase tracking-wider text-beta-mint/60">Consejo de Salud</p>
-        <p className="mt-2 text-sm leading-relaxed text-zinc-300">
-          Recuerda beber al menos 8 vasos de agua al día y mantener tus controles médicos al día.
+      {/* Health Profile Completion — Endowed Progress */}
+      <motion.div
+        variants={fadeUp}
+        custom={2}
+        className="overflow-hidden rounded-2xl border border-white/[0.06] bg-white/[0.03] p-4 backdrop-blur-sm"
+      >
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-bold text-white">Perfil de Salud</p>
+            <p className="mt-0.5 text-xs text-white/40">
+              Completa tu perfil para una mejor atención
+            </p>
+          </div>
+          <div className="relative flex h-14 w-14 items-center justify-center">
+            <svg className="h-14 w-14 -rotate-90" viewBox="0 0 36 36">
+              <path
+                className="text-white/[0.08]"
+                d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="3"
+              />
+              <path
+                className="text-beta-mint"
+                d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="3"
+                strokeDasharray={`${profileCompletion}, 100`}
+                strokeLinecap="round"
+              />
+            </svg>
+            <span className="absolute text-xs font-bold text-beta-mint">{profileCompletion}%</span>
+          </div>
+        </div>
+        <button
+          onClick={onGoToPerfil}
+          className="mt-3 flex items-center gap-1 text-xs font-semibold text-beta-mint transition-colors active:text-beta-mint/70"
+        >
+          Completar <ChevronRight size={14} />
+        </button>
+      </motion.div>
+
+      {/* Health tip — Reciprocity */}
+      <motion.div
+        variants={fadeUp}
+        custom={3}
+        className="rounded-2xl border border-white/[0.06] bg-gradient-to-br from-beta-mint/[0.06] to-transparent p-4 backdrop-blur-sm"
+      >
+        <div className="flex items-center gap-2">
+          <Sparkles size={14} className="text-beta-mint" />
+          <p className="text-[10px] font-bold uppercase tracking-wider text-beta-mint/60">Tip diario</p>
+        </div>
+        <p className="mt-2 text-sm leading-relaxed text-white/60">
+          {healthTips[tipIndex]}
         </p>
-      </div>
-    </div>
+      </motion.div>
+
+      {/* Trust banner — Authority */}
+      <motion.div variants={fadeUp} custom={4} className="flex items-center justify-center gap-4 py-2 text-[11px] text-white/20">
+        <span className="flex items-center gap-1.5">
+          <Lock size={10} />
+          Cifrado E2E
+        </span>
+        <span>·</span>
+        <span className="flex items-center gap-1.5">
+          <ShieldCheck size={10} />
+          HIPAA Ready
+        </span>
+      </motion.div>
+    </motion.div>
   )
 }
 
@@ -572,6 +681,7 @@ function TabSalud({ clinic }: { clinic: { nombre: string; nit: string; telefono:
   const vaccApplied = vaccinations.filter((v) => v.aplicada).length
   const vaccTotal = vaccinations.length
   const vaccPercent = Math.round((vaccApplied / vaccTotal) * 100)
+  const vaccPending = vaccTotal - vaccApplied
 
   const typeIcon: Record<TimelineEvent['tipo'], typeof Activity> = {
     consulta: Stethoscope,
@@ -589,8 +699,7 @@ function TabSalud({ clinic }: { clinic: { nombre: string; nit: string; telefono:
 
   function formatFecha(iso: string) {
     const d = new Date(iso + 'T12:00:00')
-    const formatted = d.toLocaleDateString('es-GT', { day: 'numeric', month: 'short' })
-    return formatted
+    return d.toLocaleDateString('es-GT', { day: 'numeric', month: 'short' })
   }
 
   function handlePDF(rx: Receta) {
@@ -604,15 +713,15 @@ function TabSalud({ clinic }: { clinic: { nombre: string; nit: string; telefono:
   }
 
   return (
-    <div className="space-y-5">
-      <div>
-        <h1 className="text-xl font-bold text-zinc-100">Mi Salud</h1>
-        <p className="mt-0.5 text-xs text-zinc-500">Historial médico y documentos</p>
-      </div>
+    <motion.div initial="hidden" animate="visible" variants={stagger} className="space-y-5">
+      <motion.div variants={fadeUp} custom={0}>
+        <h1 className="text-xl font-bold text-white">Mi Salud</h1>
+        <p className="mt-0.5 text-xs text-white/40">Historial médico y documentos</p>
+      </motion.div>
 
       {/* ── Timeline ─────────────────────────────────────── */}
-      <div>
-        <h3 className="mb-3 text-[11px] font-bold uppercase tracking-wider text-zinc-500">
+      <motion.div variants={fadeUp} custom={1}>
+        <h3 className="mb-3 text-[11px] font-bold uppercase tracking-wider text-white/30">
           Línea de Tiempo
         </h3>
         <div className="space-y-0.5">
@@ -622,21 +731,19 @@ function TabSalud({ clinic }: { clinic: { nombre: string; nit: string; telefono:
             const isLast = i === visibleTimeline.length - 1
             return (
               <div key={ev.id} className="flex gap-3">
-                {/* Vertical line */}
                 <div className="flex flex-col items-center">
                   <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${color}`}>
                     <Icon size={14} />
                   </div>
-                  {!isLast && <div className="w-px flex-1 bg-zinc-700/50" />}
+                  {!isLast && <div className="w-px flex-1 bg-white/[0.06]" />}
                 </div>
-                {/* Content */}
                 <div className={`flex-1 ${isLast ? 'pb-0' : 'pb-4'}`}>
                   <div className="flex items-baseline justify-between">
-                    <p className="text-sm font-semibold text-zinc-200">{ev.titulo}</p>
-                    <span className="shrink-0 text-[10px] text-zinc-600">{formatFecha(ev.fecha)}</span>
+                    <p className="text-sm font-semibold text-white/80">{ev.titulo}</p>
+                    <span className="shrink-0 text-[10px] text-white/25">{formatFecha(ev.fecha)}</span>
                   </div>
-                  <p className="text-xs text-zinc-500">{ev.doctor}</p>
-                  <p className="mt-1 text-xs leading-relaxed text-zinc-400">{ev.detalle}</p>
+                  <p className="text-xs text-white/40">{ev.doctor}</p>
+                  <p className="mt-1 text-xs leading-relaxed text-white/50">{ev.detalle}</p>
                 </div>
               </div>
             )
@@ -651,69 +758,69 @@ function TabSalud({ clinic }: { clinic: { nombre: string; nit: string; telefono:
             {showAllTimeline ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
           </button>
         )}
-      </div>
+      </motion.div>
 
       {/* ── Prescriptions ────────────────────────────────── */}
-      <div>
-        <h3 className="mb-3 text-[11px] font-bold uppercase tracking-wider text-zinc-500">
+      <motion.div variants={fadeUp} custom={2}>
+        <h3 className="mb-3 text-[11px] font-bold uppercase tracking-wider text-white/30">
           Recetas Médicas
         </h3>
         <div className="space-y-2.5">
           {prescriptions.map((rx) => {
             const isExpanded = expandedRx === rx.id
             return (
-              <div key={rx.id} className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-800/50">
+              <div key={rx.id} className="overflow-hidden rounded-2xl border border-white/[0.06] bg-white/[0.03] backdrop-blur-sm">
                 <button
                   onClick={() => setExpandedRx(isExpanded ? null : rx.id)}
-                  className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors active:bg-zinc-800"
+                  className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors active:bg-white/[0.08]"
                 >
                   <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${
-                    rx.estado === 'activa' ? 'bg-beta-mint/15' : 'bg-zinc-700/30'
+                    rx.estado === 'activa' ? 'bg-beta-mint/15' : 'bg-white/[0.05]'
                   }`}>
-                    <FileText size={16} className={rx.estado === 'activa' ? 'text-beta-mint' : 'text-zinc-500'} />
+                    <FileText size={16} className={rx.estado === 'activa' ? 'text-beta-mint' : 'text-white/30'} />
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                      <p className="truncate text-sm font-semibold text-zinc-100">{rx.diagnostico}</p>
+                      <p className="truncate text-sm font-semibold text-white">{rx.diagnostico}</p>
                       <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${
                         rx.estado === 'activa'
                           ? 'bg-beta-mint/15 text-beta-mint'
-                          : 'bg-zinc-700/50 text-zinc-500'
+                          : 'bg-white/[0.05] text-white/30'
                       }`}>
                         {rx.estado}
                       </span>
                     </div>
-                    <p className="mt-0.5 text-[11px] text-zinc-500">{rx.doctor} · {rx.fecha}</p>
+                    <p className="mt-0.5 text-[11px] text-white/40">{rx.doctor} · {rx.fecha}</p>
                   </div>
-                  {isExpanded ? <ChevronUp size={14} className="text-zinc-500" /> : <ChevronDown size={14} className="text-zinc-500" />}
+                  {isExpanded ? <ChevronUp size={14} className="text-white/30" /> : <ChevronDown size={14} className="text-white/30" />}
                 </button>
 
                 {isExpanded && (
-                  <div className="border-t border-zinc-700/50">
+                  <div className="border-t border-white/[0.06]">
                     <div className="space-y-2 p-4">
                       {rx.medicamentos.map((m, i) => (
-                        <div key={i} className="flex items-start gap-3 rounded-xl bg-zinc-900/60 p-3">
+                        <div key={i} className="flex items-start gap-3 rounded-xl bg-white/[0.05] p-3">
                           <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-beta-mint/10">
                             <Pill size={12} className="text-beta-mint" />
                           </div>
                           <div>
-                            <p className="text-sm font-medium text-zinc-200">{m.nombre}</p>
-                            <p className="text-xs text-zinc-500">{m.dosis} · {m.frecuencia} · {m.duracion}</p>
+                            <p className="text-sm font-medium text-white/80">{m.nombre}</p>
+                            <p className="text-xs text-white/40">{m.dosis} · {m.frecuencia} · {m.duracion}</p>
                           </div>
                         </div>
                       ))}
                     </div>
-                    <div className="flex gap-2 border-t border-zinc-700/50 px-4 py-3">
+                    <div className="flex gap-2 border-t border-white/[0.06] px-4 py-3">
                       <button
                         onClick={() => handlePDF(rx)}
-                        className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-beta-mint/30 bg-beta-mint/10 py-2.5 text-xs font-semibold text-beta-mint transition-colors active:bg-beta-mint/20"
+                        className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-beta-mint/30 bg-beta-mint/[0.08] py-2.5 text-xs font-semibold text-beta-mint transition-colors active:bg-beta-mint/20"
                       >
                         <Download size={14} />
                         PDF
                       </button>
                       <button
                         onClick={() => handleFarmacia(rx)}
-                        className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 py-2.5 text-xs font-semibold text-emerald-400 transition-colors active:bg-emerald-500/20"
+                        className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/[0.08] py-2.5 text-xs font-semibold text-emerald-400 transition-colors active:bg-emerald-500/20"
                       >
                         <WaIcon size={14} />
                         Farmacia
@@ -725,64 +832,67 @@ function TabSalud({ clinic }: { clinic: { nombre: string; nit: string; telefono:
             )
           })}
         </div>
-      </div>
+      </motion.div>
 
-      {/* ── Vaccination Progress ─────────────────────────── */}
-      <div>
-        <h3 className="mb-3 text-[11px] font-bold uppercase tracking-wider text-zinc-500">
+      {/* ── Vaccination Progress — Goal-Gradient ──────────── */}
+      <motion.div variants={fadeUp} custom={3}>
+        <h3 className="mb-3 text-[11px] font-bold uppercase tracking-wider text-white/30">
           Vacunación
         </h3>
-        <div className="rounded-2xl border border-zinc-800 bg-zinc-800/50 p-4">
-          {/* Progress bar */}
-          <div className="mb-3 flex items-center justify-between">
-            <p className="text-sm font-semibold text-zinc-200">Progreso</p>
+        <div className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-4 backdrop-blur-sm">
+          <div className="mb-1 flex items-center justify-between">
+            <p className="text-sm font-semibold text-white/80">Progreso</p>
             <span className="text-sm font-bold text-beta-mint">{vaccPercent}%</span>
           </div>
-          <div className="mb-4 h-2 overflow-hidden rounded-full bg-zinc-700">
+          <p className="mb-3 text-xs text-white/40">
+            {vaccPending > 0
+              ? `Falta${vaccPending > 1 ? 'n' : ''} ${vaccPending} vacuna${vaccPending > 1 ? 's' : ''} para completar tu esquema`
+              : 'Esquema de vacunación completo'}
+          </p>
+          <div className="mb-4 h-2 overflow-hidden rounded-full bg-white/[0.08]">
             <div
               className="h-full rounded-full bg-gradient-to-r from-beta-mint to-emerald-400 transition-all"
               style={{ width: `${vaccPercent}%` }}
             />
           </div>
 
-          {/* Vaccine list */}
           <div className="space-y-2">
             {vaccinations.map((v, i) => (
               <div key={i} className="flex items-center gap-3">
                 <div className={`flex h-7 w-7 items-center justify-center rounded-lg ${
-                  v.aplicada ? 'bg-emerald-500/15' : 'bg-zinc-700/30'
+                  v.aplicada ? 'bg-emerald-500/15' : 'bg-white/[0.05]'
                 }`}>
                   {v.aplicada ? (
                     <CheckCircle2 size={14} className="text-emerald-400" />
                   ) : (
-                    <Syringe size={14} className="text-zinc-500" />
+                    <Syringe size={14} className="text-white/30" />
                   )}
                 </div>
                 <div className="flex-1">
-                  <p className={`text-xs font-medium ${v.aplicada ? 'text-zinc-300' : 'text-zinc-500'}`}>
+                  <p className={`text-xs font-medium ${v.aplicada ? 'text-white/70' : 'text-white/40'}`}>
                     {v.nombre}
                   </p>
                 </div>
-                <span className={`text-[10px] ${v.aplicada ? 'text-zinc-500' : 'text-amber-400'}`}>
+                <span className={`text-[10px] ${v.aplicada ? 'text-white/30' : 'text-amber-400'}`}>
                   {v.aplicada ? v.fecha : 'Pendiente'}
                 </span>
               </div>
             ))}
           </div>
         </div>
-      </div>
+      </motion.div>
 
       {/* ── Diet tip card ────────────────────────────────── */}
-      <div className="rounded-2xl border border-zinc-800 bg-gradient-to-br from-emerald-500/5 to-transparent p-4">
+      <motion.div variants={fadeUp} custom={4} className="rounded-2xl border border-white/[0.06] bg-gradient-to-br from-emerald-500/[0.06] to-transparent p-4 backdrop-blur-sm">
         <div className="flex items-center gap-2">
           <Salad size={16} className="text-emerald-400" />
           <p className="text-xs font-bold uppercase tracking-wider text-emerald-400/60">Plan Nutricional</p>
         </div>
-        <p className="mt-2 text-sm leading-relaxed text-zinc-300">
+        <p className="mt-2 text-sm leading-relaxed text-white/60">
           Tu próximo control nutricional está programado. Recuerda llevar tu registro de alimentación semanal.
         </p>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   )
 }
 
@@ -801,12 +911,11 @@ function TabCitas({
 }) {
   const [showBooking, setShowBooking] = useState(false)
 
-  // Patient's own appointments (simulate by matching name or showing all)
   const myAppointments = appointments.filter((a) =>
     a.patient.toLowerCase().includes('paciente') ||
     a.patient === userName ||
     a.status === 'Confirmada' ||
-    a.status === 'Pendiente'
+    a.status === 'Pendiente',
   )
 
   const statusColor: Record<string, string> = {
@@ -816,18 +925,17 @@ function TabCitas({
   }
 
   return (
-    <div className="space-y-5">
-      <div className="flex items-center justify-between">
+    <motion.div initial="hidden" animate="visible" variants={stagger} className="space-y-5">
+      <motion.div variants={fadeUp} custom={0} className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold text-zinc-100">Mis Citas</h1>
-          <p className="mt-0.5 text-xs text-zinc-500">Historial y reservas</p>
+          <h1 className="text-xl font-bold text-white">Mis Citas</h1>
+          <p className="mt-0.5 text-xs text-white/40">Historial y reservas</p>
         </div>
-      </div>
+      </motion.div>
 
-      {/* Booking inline */}
+      {/* Booking wizard */}
       {showBooking && (
-        <MiniBooking
-          appointments={appointments}
+        <PortalBookingWizard
           setAppointments={setAppointments}
           userName={userName}
           onClose={() => setShowBooking(false)}
@@ -837,24 +945,24 @@ function TabCitas({
       {/* Appointment list */}
       {!showBooking && (
         <>
-          <div className="space-y-2.5">
+          <motion.div variants={fadeUp} custom={1} className="space-y-2.5">
             {myAppointments.length === 0 && (
-              <div className="rounded-2xl border border-dashed border-zinc-700 py-12 text-center">
-                <CalendarDays size={32} className="mx-auto text-zinc-700" />
-                <p className="mt-2 text-sm text-zinc-500">No tienes citas registradas</p>
+              <div className="rounded-2xl border border-dashed border-white/[0.08] py-12 text-center">
+                <CalendarDays size={32} className="mx-auto text-white/20" />
+                <p className="mt-2 text-sm text-white/40">No tienes citas registradas</p>
               </div>
             )}
             {myAppointments.map((a, i) => (
               <div
                 key={i}
-                className="flex items-center gap-3 rounded-2xl border border-zinc-800 bg-zinc-800/50 p-3.5"
+                className="flex items-center gap-3 rounded-2xl border border-white/[0.06] bg-white/[0.03] p-3.5 backdrop-blur-sm"
               >
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-beta-mint/15">
                   <Stethoscope size={18} className="text-beta-mint" />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-semibold text-zinc-100">{a.doctor}</p>
-                  <div className="mt-0.5 flex items-center gap-2 text-[11px] text-zinc-500">
+                  <p className="text-sm font-semibold text-white">{a.doctor}</p>
+                  <div className="mt-0.5 flex items-center gap-2 text-[11px] text-white/40">
                     <span className="flex items-center gap-1">
                       <Clock size={10} />
                       {a.time}
@@ -863,20 +971,23 @@ function TabCitas({
                     <span>{a.patient}</span>
                   </div>
                 </div>
-                <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold ${statusColor[a.status] ?? 'bg-zinc-700/50 text-zinc-500'}`}>
+                <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold ${statusColor[a.status] ?? 'bg-white/[0.05] text-white/30'}`}>
                   {a.status}
                 </span>
               </div>
             ))}
-          </div>
+          </motion.div>
 
-          {/* Info */}
-          <div className="rounded-2xl border border-dashed border-zinc-700 p-4 text-center">
-            <CalendarClock size={24} className="mx-auto text-zinc-600" />
-            <p className="mt-2 text-xs text-zinc-500">
-              Tus citas se sincronizan con el calendario de la clínica
+          {/* Sync indicator — Social Proof */}
+          <motion.div variants={fadeUp} custom={2} className="flex items-center justify-center gap-2 rounded-2xl border border-dashed border-white/[0.08] py-4">
+            <span className="relative flex h-2 w-2">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
+            </span>
+            <p className="text-xs text-white/40">
+              Sincronizado en tiempo real con el calendario de la clínica
             </p>
-          </div>
+          </motion.div>
         </>
       )}
 
@@ -884,82 +995,60 @@ function TabCitas({
       {!showBooking && (
         <button
           onClick={() => setShowBooking(true)}
-          className="fixed bottom-20 right-1/2 z-10 flex h-14 w-14 translate-x-[calc(min(256px,50vw)-2rem)] items-center justify-center rounded-full bg-beta-mint shadow-lg shadow-beta-mint/25 transition-all active:scale-95"
+          className="fixed bottom-20 right-1/2 z-10 flex h-14 w-14 translate-x-[calc(min(256px,50vw)-2rem)] items-center justify-center rounded-full bg-beta-mint shadow-[0_0_20px_rgba(127,255,212,0.25)] transition-all active:scale-95"
         >
-          <Plus size={24} className="text-zinc-900" strokeWidth={2.5} />
+          <Plus size={24} className="text-omega-abyss" strokeWidth={2.5} />
         </button>
       )}
-    </div>
+    </motion.div>
   )
 }
 
-/* ── Mini Booking (embedded) ──────────────────────────── */
+/* ── Portal Booking Wizard (3-step, specialty-based) ───── */
 
-function MiniBooking({
-  appointments,
+function PortalBookingWizard({
   setAppointments,
   userName,
   onClose,
 }: {
-  appointments: Appointment[]
   setAppointments: React.Dispatch<React.SetStateAction<Appointment[]>>
   userName: string
   onClose: () => void
 }) {
-  const [specialty, setSpecialty] = useState(bookingSpecialties[0])
+  const [step, setStep] = useState(1)
+  const [selectedSpecialty, setSelectedSpecialty] = useState<SpecialtyConfig | null>(null)
+  const [motivo, setMotivo] = useState('')
   const [selectedDate, setSelectedDate] = useState('')
   const [selectedTime, setSelectedTime] = useState('')
   const [showSuccess, setShowSuccess] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
 
-  const doctor = doctorBySpecialty[specialty] ?? 'Dr. Rodríguez'
-
-  const days = useMemo(() => {
-    const result: { iso: string; dayNum: string; dayName: string; monthLabel: string; fullLabel: string }[] = []
-    for (let i = 1; i <= 14; i++) {
-      const d = new Date()
-      d.setDate(d.getDate() + i)
-      result.push({
-        iso: d.toISOString().split('T')[0],
-        dayNum: d.getDate().toString(),
-        dayName: d.toLocaleDateString('es-GT', { weekday: 'short' }).replace('.', ''),
-        monthLabel: d.toLocaleDateString('es-GT', { month: 'short' }).replace('.', ''),
-        fullLabel: d.toLocaleDateString('es-GT', { weekday: 'long', day: 'numeric', month: 'long' }),
-      })
-    }
-    return result
-  }, [])
-
-  const occupiedTimes = useMemo(() => {
-    return new Set(
-      appointments
-        .filter((a) => a.doctor === doctor && a.status !== 'Cancelada')
-        .map((a) => a.time),
-    )
-  }, [appointments, doctor])
-
+  const days = useMemo(() => getNext14Days(), [])
+  const occupied = useMemo(
+    () => (selectedDate ? getOccupied(selectedDate) : new Set<string>()),
+    [selectedDate],
+  )
   const selectedDayInfo = days.find((d) => d.iso === selectedDate)
 
-  function capitalize(s: string) {
-    return s.charAt(0).toUpperCase() + s.slice(1)
-  }
+  const themeColor = selectedSpecialty?.color || '#7C3AED'
+  const themeAccent = selectedSpecialty?.accent || '#7FFFD4'
 
   function handleConfirm() {
-    if (!selectedDate || !selectedTime) return
+    if (!selectedSpecialty || !selectedDate || !selectedTime) return
 
     setAppointments((prev) => [
       ...prev,
       {
         patient: userName,
         time: selectedTime,
-        doctor,
+        doctor: selectedSpecialty.doctor,
         status: 'Pendiente',
       },
     ])
 
     setShowSuccess(true)
     toast.success('Cita agendada exitosamente')
-    setTimeout(() => onClose(), 2000)
+    setTimeout(() => onClose(), 2500)
   }
 
   if (showSuccess) {
@@ -971,14 +1060,30 @@ function MiniBooking({
           transition={{ type: 'spring', stiffness: 300, damping: 20 }}
           className="text-center"
         >
-          <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-beta-mint/20">
-            <CheckCircle2 size={44} className="text-beta-mint" strokeWidth={2} />
+          <div
+            className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-full"
+            style={{ backgroundColor: `${themeAccent}20` }}
+          >
+            <CheckCircle2 size={44} style={{ color: themeAccent }} strokeWidth={2} />
           </div>
-          <h2 className="text-lg font-bold text-zinc-100">Cita Confirmada</h2>
-          <p className="mt-1.5 text-sm text-zinc-400">
+          <h2 className="text-lg font-bold text-white">Cita Confirmada</h2>
+          <p className="mt-1.5 text-sm text-white/50">
             {capitalize(selectedDayInfo?.fullLabel ?? '')} a las {selectedTime}
           </p>
-          <p className="mt-1 text-xs text-zinc-500">{specialty} — {doctor}</p>
+          <p className="mt-1 text-xs text-white/30">
+            {selectedSpecialty?.label} — {selectedSpecialty?.doctor}
+          </p>
+          {/* WhatsApp share */}
+          <button
+            onClick={() => {
+              const msg = `Hola! Acabo de agendar una cita:\n\n${selectedSpecialty?.label}\n${selectedSpecialty?.doctor}\n${capitalize(selectedDayInfo?.fullLabel ?? '')} a las ${selectedTime}\n\nAgendado en Beta Clinic`
+              window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank')
+            }}
+            className="mx-auto mt-4 flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/[0.08] px-4 py-2 text-xs font-semibold text-emerald-400 transition-colors active:bg-emerald-500/20"
+          >
+            <MessageCircle size={14} />
+            Compartir por WhatsApp
+          </button>
         </motion.div>
       </div>
     )
@@ -992,164 +1097,294 @@ function MiniBooking({
     >
       {/* Header */}
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-bold text-zinc-100">Agendar Cita</h2>
+        <div className="flex items-center gap-3">
+          {step > 1 && (
+            <button
+              onClick={() => setStep(step - 1)}
+              className="rounded-lg p-1.5 text-white/40 transition-colors active:bg-white/[0.08]"
+            >
+              <ChevronLeft size={20} />
+            </button>
+          )}
+          <h2 className="text-lg font-bold text-white">Agendar Cita</h2>
+        </div>
         <button
           onClick={onClose}
-          className="rounded-lg p-1.5 text-zinc-500 transition-colors active:bg-zinc-800"
+          className="rounded-lg p-1.5 text-white/40 transition-colors active:bg-white/[0.08]"
         >
           <X size={20} />
         </button>
       </div>
 
-      {/* Specialty */}
-      <div>
-        <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-zinc-500">
-          Especialidad
-        </label>
-        <div className="flex flex-wrap gap-2">
-          {bookingSpecialties.map((s) => (
-            <button
-              key={s}
-              onClick={() => { setSpecialty(s); setSelectedTime('') }}
-              className={`rounded-xl border px-3 py-2 text-xs font-semibold transition-colors ${
-                specialty === s
-                  ? 'border-beta-mint bg-beta-mint/15 text-beta-mint'
-                  : 'border-zinc-700 bg-zinc-800/50 text-zinc-400 active:bg-zinc-800'
-              }`}
-            >
-              {s}
-            </button>
-          ))}
-        </div>
-        <p className="mt-2 flex items-center gap-1.5 text-xs text-zinc-500">
-          <Stethoscope size={13} />
-          {doctor}
-        </p>
+      {/* Step indicator */}
+      <div className="flex items-center gap-2">
+        {[1, 2, 3].map((s) => (
+          <div
+            key={s}
+            className="h-1.5 flex-1 rounded-full transition-colors"
+            style={{
+              backgroundColor: s <= step ? themeAccent : 'rgba(255,255,255,0.08)',
+            }}
+          />
+        ))}
       </div>
 
-      {/* Date carousel */}
-      <div>
-        <div className="mb-1.5 flex items-center justify-between">
-          <label className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">
-            Fecha
-          </label>
-          <div className="flex gap-1">
-            <button
-              onClick={() => scrollRef.current?.scrollBy({ left: -200, behavior: 'smooth' })}
-              className="rounded-lg border border-zinc-700 p-1 text-zinc-500 transition-colors active:bg-zinc-800"
-            >
-              <ChevronLeft size={14} />
-            </button>
-            <button
-              onClick={() => scrollRef.current?.scrollBy({ left: 200, behavior: 'smooth' })}
-              className="rounded-lg border border-zinc-700 p-1 text-zinc-500 transition-colors active:bg-zinc-800"
-            >
-              <ChevronRight size={14} />
-            </button>
-          </div>
-        </div>
-        <div
-          ref={scrollRef}
-          className="-mx-5 flex gap-2 overflow-x-auto px-5 pb-2"
-          style={{ scrollbarWidth: 'none' }}
+      {/* Step 1: Specialty + Motivo */}
+      {step === 1 && (
+        <motion.div
+          initial={{ opacity: 0, x: 40 }}
+          animate={{ opacity: 1, x: 0 }}
+          className="space-y-4"
         >
-          {days.map((d) => (
-            <button
-              key={d.iso}
-              onClick={() => { setSelectedDate(d.iso); setSelectedTime('') }}
-              className={`flex shrink-0 flex-col items-center rounded-2xl border px-4 py-3 transition-colors ${
-                selectedDate === d.iso
-                  ? 'border-beta-mint bg-beta-mint/15 text-beta-mint'
-                  : 'border-zinc-700/60 bg-zinc-800/40 text-zinc-400 active:bg-zinc-800'
-              }`}
-            >
-              <span className="text-[10px] font-medium uppercase tracking-wide opacity-70">{d.dayName}</span>
-              <span className="mt-0.5 text-xl font-bold leading-none">{d.dayNum}</span>
-              <span className="mt-1 text-[10px] font-medium uppercase opacity-50">{d.monthLabel}</span>
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Time slots */}
-      {selectedDate && (
-        <div>
-          <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-zinc-500">
-            Hora
+          <label className="block text-[11px] font-semibold uppercase tracking-wider text-white/30">
+            Especialidad
           </label>
-          <div className="grid grid-cols-3 gap-2">
-            {allSlots.map((slot) => {
-              const isOccupied = occupiedTimes.has(slot)
-              const isSelected = selectedTime === slot
+          <div className="grid grid-cols-2 gap-2">
+            {SPECIALTY_DATA.map((spec) => {
+              const isActive = selectedSpecialty?.key === spec.key
               return (
                 <button
-                  key={slot}
-                  disabled={isOccupied}
-                  onClick={() => setSelectedTime(slot)}
-                  className={`rounded-xl border py-2.5 text-xs font-semibold transition-colors ${
-                    isSelected
-                      ? 'border-beta-mint bg-beta-mint/15 text-beta-mint'
-                      : isOccupied
-                        ? 'border-zinc-800 bg-zinc-800/20 text-zinc-600 line-through'
-                        : 'border-zinc-700 bg-zinc-800/50 text-zinc-300 active:bg-zinc-800'
-                  }`}
+                  key={spec.key}
+                  onClick={() => { setSelectedSpecialty(spec); setMotivo('') }}
+                  className="flex items-center gap-2.5 rounded-2xl border p-3 text-left transition-all active:scale-[0.98]"
+                  style={{
+                    borderColor: isActive ? `${spec.accent}50` : 'rgba(255,255,255,0.06)',
+                    backgroundColor: isActive ? `${spec.color}15` : 'rgba(255,255,255,0.03)',
+                  }}
                 >
-                  {slot}
+                  <span className="text-xl">{spec.emoji}</span>
+                  <div>
+                    <p className="text-xs font-semibold" style={{ color: isActive ? spec.accent : 'rgba(255,255,255,0.7)' }}>
+                      {spec.label}
+                    </p>
+                    <p className="text-[10px] text-white/30">{spec.doctor}</p>
+                  </div>
                 </button>
               )
             })}
           </div>
-        </div>
-      )}
 
-      {/* Confirm */}
-      {selectedDate && selectedTime && (
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="overflow-hidden rounded-2xl border border-zinc-700 bg-zinc-800/50"
-        >
-          <div className="border-b border-zinc-700/50 px-4 py-2.5">
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">Resumen</p>
-          </div>
-          <div className="space-y-2 p-4">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-beta-mint/15">
-                <Stethoscope size={18} className="text-beta-mint" />
+          {selectedSpecialty && (
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+              <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-white/30">
+                Motivo de consulta
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {selectedSpecialty.motivos.map((m) => (
+                  <button
+                    key={m}
+                    onClick={() => setMotivo(m)}
+                    className="rounded-xl border px-3 py-2 text-xs font-semibold transition-colors"
+                    style={{
+                      borderColor: motivo === m ? `${themeAccent}50` : 'rgba(255,255,255,0.06)',
+                      backgroundColor: motivo === m ? `${themeColor}15` : 'rgba(255,255,255,0.03)',
+                      color: motivo === m ? themeAccent : 'rgba(255,255,255,0.5)',
+                    }}
+                  >
+                    {m}
+                  </button>
+                ))}
               </div>
-              <div>
-                <p className="text-sm font-semibold text-zinc-100">{doctor}</p>
-                <p className="text-xs text-zinc-500">{specialty}</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-4 text-xs text-zinc-400">
-              <span className="flex items-center gap-1.5">
-                <CalendarClock size={13} />
-                {capitalize(selectedDayInfo?.fullLabel ?? '')}
-              </span>
-              <span className="flex items-center gap-1.5">
-                <Clock size={13} />
-                {selectedTime}
-              </span>
-            </div>
-          </div>
-          <div className="px-4 pb-4">
-            <button
-              onClick={handleConfirm}
-              className="flex w-full items-center justify-center gap-2 rounded-xl bg-beta-mint py-3.5 text-sm font-bold text-zinc-900 transition-colors active:bg-beta-mint/80"
-            >
-              <CalendarPlus size={18} />
-              Confirmar Cita
-            </button>
-          </div>
+            </motion.div>
+          )}
+
+          {selectedSpecialty && motivo && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+              <button
+                onClick={() => setStep(2)}
+                className="flex w-full items-center justify-center gap-2 rounded-xl py-3 text-sm font-bold transition-all active:scale-[0.98]"
+                style={{ backgroundColor: themeAccent, color: '#0B0613' }}
+              >
+                Continuar
+                <ChevronRight size={16} />
+              </button>
+            </motion.div>
+          )}
         </motion.div>
       )}
 
-      {!selectedDate && (
-        <div className="rounded-2xl border border-dashed border-zinc-700 py-10 text-center">
-          <CalendarClock size={28} className="mx-auto text-zinc-700" />
-          <p className="mt-2 text-xs text-zinc-500">Selecciona una fecha para ver horarios</p>
-        </div>
+      {/* Step 2: Date + Time */}
+      {step === 2 && (
+        <motion.div
+          initial={{ opacity: 0, x: 40 }}
+          animate={{ opacity: 1, x: 0 }}
+          className="space-y-4"
+        >
+          {/* Date carousel */}
+          <div>
+            <div className="mb-1.5 flex items-center justify-between">
+              <label className="text-[11px] font-semibold uppercase tracking-wider text-white/30">
+                Fecha
+              </label>
+              <div className="flex gap-1">
+                <button
+                  onClick={() => scrollRef.current?.scrollBy({ left: -200, behavior: 'smooth' })}
+                  className="rounded-lg border border-white/[0.06] p-1 text-white/30 transition-colors active:bg-white/[0.08]"
+                >
+                  <ChevronLeft size={14} />
+                </button>
+                <button
+                  onClick={() => scrollRef.current?.scrollBy({ left: 200, behavior: 'smooth' })}
+                  className="rounded-lg border border-white/[0.06] p-1 text-white/30 transition-colors active:bg-white/[0.08]"
+                >
+                  <ChevronRight size={14} />
+                </button>
+              </div>
+            </div>
+            <div
+              ref={scrollRef}
+              className="-mx-5 flex gap-2 overflow-x-auto px-5 pb-2"
+              style={{ scrollbarWidth: 'none' }}
+            >
+              {days.map((d) => {
+                const isActive = selectedDate === d.iso
+                return (
+                  <button
+                    key={d.iso}
+                    onClick={() => { setSelectedDate(d.iso); setSelectedTime('') }}
+                    className="flex shrink-0 flex-col items-center rounded-2xl border px-4 py-3 transition-all"
+                    style={{
+                      borderColor: isActive ? `${themeAccent}50` : 'rgba(255,255,255,0.06)',
+                      backgroundColor: isActive ? `${themeColor}15` : 'rgba(255,255,255,0.03)',
+                      color: isActive ? themeAccent : 'rgba(255,255,255,0.5)',
+                    }}
+                  >
+                    <span className="text-[10px] font-medium uppercase tracking-wide opacity-70">{d.dayName}</span>
+                    <span className="mt-0.5 text-xl font-bold leading-none">{d.dayNum}</span>
+                    <span className="mt-1 text-[10px] font-medium uppercase opacity-50">{d.monthLabel}</span>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* Time slots */}
+          {selectedDate && (
+            <div>
+              <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-white/30">
+                Hora
+              </label>
+              <div className="grid grid-cols-3 gap-2">
+                {ALL_SLOTS.map((slot) => {
+                  const isOccupied = occupied.has(slot)
+                  const isSelected = selectedTime === slot
+                  return (
+                    <button
+                      key={slot}
+                      disabled={isOccupied}
+                      onClick={() => setSelectedTime(slot)}
+                      className="rounded-xl border py-2.5 text-xs font-semibold transition-all"
+                      style={{
+                        borderColor: isSelected ? `${themeAccent}50` : isOccupied ? 'rgba(255,255,255,0.03)' : 'rgba(255,255,255,0.06)',
+                        backgroundColor: isSelected ? `${themeColor}15` : isOccupied ? 'rgba(255,255,255,0.02)' : 'rgba(255,255,255,0.03)',
+                        color: isSelected ? themeAccent : isOccupied ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.6)',
+                        textDecoration: isOccupied ? 'line-through' : 'none',
+                      }}
+                    >
+                      {slot}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
+          {selectedDate && selectedTime && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+              <button
+                onClick={() => setStep(3)}
+                className="flex w-full items-center justify-center gap-2 rounded-xl py-3 text-sm font-bold transition-all active:scale-[0.98]"
+                style={{ backgroundColor: themeAccent, color: '#0B0613' }}
+              >
+                Continuar
+                <ChevronRight size={16} />
+              </button>
+            </motion.div>
+          )}
+
+          {!selectedDate && (
+            <div className="rounded-2xl border border-dashed border-white/[0.08] py-10 text-center">
+              <CalendarClock size={28} className="mx-auto text-white/20" />
+              <p className="mt-2 text-xs text-white/40">Selecciona una fecha para ver horarios</p>
+            </div>
+          )}
+        </motion.div>
+      )}
+
+      {/* Step 3: Confirmation */}
+      {step === 3 && selectedSpecialty && (
+        <motion.div
+          initial={{ opacity: 0, x: 40 }}
+          animate={{ opacity: 1, x: 0 }}
+          className="space-y-4"
+        >
+          <div
+            className="overflow-hidden rounded-2xl border"
+            style={{ borderColor: `${themeAccent}30` }}
+          >
+            <div className="border-b px-4 py-2.5" style={{ borderColor: `${themeAccent}15` }}>
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-white/40">Resumen de tu cita</p>
+            </div>
+            <div className="space-y-3 p-4">
+              <div className="flex items-center gap-3">
+                <div
+                  className="flex h-12 w-12 items-center justify-center rounded-xl"
+                  style={{ backgroundColor: `${themeColor}20` }}
+                >
+                  <span className="text-2xl">{selectedSpecialty.emoji}</span>
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-white">{selectedSpecialty.doctor}</p>
+                  <p className="text-xs" style={{ color: themeAccent }}>{selectedSpecialty.label}</p>
+                </div>
+              </div>
+
+              <div className="rounded-xl bg-white/[0.05] p-3">
+                <div className="flex items-center gap-4 text-xs text-white/50">
+                  <span className="flex items-center gap-1.5">
+                    <CalendarClock size={13} />
+                    {capitalize(selectedDayInfo?.fullLabel ?? '')}
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <Clock size={13} />
+                    {selectedTime}
+                  </span>
+                </div>
+                <p className="mt-2 text-xs text-white/40">
+                  Motivo: <span className="text-white/60">{motivo}</span>
+                </p>
+              </div>
+            </div>
+
+            <div className="px-4 pb-4">
+              <button
+                onClick={handleConfirm}
+                className="flex w-full items-center justify-center gap-2 rounded-xl py-3.5 text-sm font-bold transition-all active:scale-[0.98]"
+                style={{
+                  backgroundColor: themeAccent,
+                  color: '#0B0613',
+                  boxShadow: `0 0 20px ${themeAccent}30`,
+                }}
+              >
+                <CalendarPlus size={18} />
+                Confirmar Cita
+              </button>
+            </div>
+          </div>
+
+          {/* Trust */}
+          <div className="flex items-center justify-center gap-3 text-[10px] text-white/20">
+            <span className="flex items-center gap-1">
+              <ShieldCheck size={10} />
+              Confirmación inmediata
+            </span>
+            <span>·</span>
+            <span className="flex items-center gap-1">
+              <Lock size={10} />
+              Datos protegidos
+            </span>
+          </div>
+        </motion.div>
       )}
     </motion.div>
   )
@@ -1162,148 +1397,149 @@ function MiniBooking({
 function TabPerfil({
   user,
   signOut,
+  healthData,
 }: {
   user: ReturnType<typeof useUser>['user']
   signOut: ReturnType<typeof useClerk>['signOut']
+  healthData: PatientHealthData
 }) {
   const patientId = user?.id ?? 'UNKNOWN'
   const initials = user
     ? (user.firstName?.[0] ?? '') + (user.lastName?.[0] ?? '')
     : '?'
 
-  const qrPayload = JSON.stringify({
-    type: 'beta-clinic-checkin',
-    patientId,
-    name: user?.fullName ?? 'Paciente',
-    ts: new Date().toISOString().split('T')[0],
-  })
-
   const healthCards = [
     { icon: Droplets, label: 'Tipo de Sangre', value: healthData.tipoSangre, color: 'text-red-400 bg-red-400/15' },
-    { icon: Heart, label: 'Frecuencia Cardíaca', value: healthData.frecuenciaCardiaca, color: 'text-pink-400 bg-pink-400/15' },
     { icon: AlertCircle, label: 'Alergias', value: healthData.alergias.join(', '), color: 'text-amber-400 bg-amber-400/15' },
     { icon: Shield, label: 'Seguro Médico', value: healthData.seguro, color: 'text-blue-400 bg-blue-400/15' },
+    { icon: Heart, label: 'Género', value: healthData.genero, color: 'text-pink-400 bg-pink-400/15' },
   ]
 
   return (
-    <div className="space-y-5">
+    <motion.div initial="hidden" animate="visible" variants={stagger} className="space-y-5">
       {/* ── Digital Credential Card ────────────────────── */}
-      <div className="relative overflow-hidden rounded-2xl border border-zinc-700 bg-gradient-to-br from-zinc-800 via-zinc-800/90 to-zinc-900">
-        <div className="absolute inset-0 opacity-[0.03]">
+      <motion.div
+        variants={fadeUp}
+        custom={0}
+        className="relative overflow-hidden rounded-2xl border border-white/[0.06] bg-gradient-to-br from-white/[0.05] via-white/[0.03] to-transparent backdrop-blur-sm"
+      >
+        <div className="absolute inset-0 opacity-[0.04]">
           <div className="absolute -right-6 -top-6 h-32 w-32 rounded-full border-[6px] border-beta-mint" />
           <div className="absolute -bottom-4 -left-4 h-24 w-24 rounded-full border-[6px] border-beta-mint" />
         </div>
 
-        <div className="relative flex items-center gap-2 border-b border-zinc-700/50 px-4 py-2.5">
+        <div className="relative flex items-center gap-2 border-b border-white/[0.06] px-4 py-2.5">
           <Fingerprint size={14} className="text-beta-mint" />
           <span className="text-[10px] font-bold uppercase tracking-widest text-beta-mint">
             Carnet Digital — Beta Life
           </span>
         </div>
 
-        <div className="relative flex gap-4 p-4">
-          <div className="flex-1 space-y-3">
-            <div className="flex items-center gap-3">
-              {user?.imageUrl ? (
-                <img
-                  src={user.imageUrl}
-                  alt={user.fullName ?? ''}
-                  className="h-16 w-16 rounded-2xl border-2 border-beta-mint/30 object-cover"
-                />
-              ) : (
-                <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-beta-mint/15 text-xl font-bold text-beta-mint">
-                  {initials}
-                </div>
-              )}
-              <div>
-                <h1 className="text-base font-bold text-zinc-100">
-                  {user?.fullName || 'Paciente'}
-                </h1>
-                <p className="text-[11px] text-zinc-500">
-                  {user?.primaryEmailAddress?.emailAddress}
-                </p>
+        <div className="relative p-4 space-y-3">
+          <div className="flex items-center gap-3">
+            {user?.imageUrl ? (
+              <img
+                src={user.imageUrl}
+                alt={user.fullName ?? ''}
+                className="h-16 w-16 rounded-2xl border-2 border-beta-mint/30 object-cover"
+              />
+            ) : (
+              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-beta-mint/15 text-xl font-bold text-beta-mint">
+                {initials}
               </div>
-            </div>
-
-            <div className="flex flex-wrap gap-x-4 gap-y-1.5">
-              <div>
-                <p className="text-[9px] font-semibold uppercase tracking-wider text-zinc-600">Sangre</p>
-                <p className="text-sm font-bold text-red-400">{healthData.tipoSangre}</p>
-              </div>
-              <div>
-                <p className="text-[9px] font-semibold uppercase tracking-wider text-zinc-600">Alergias</p>
-                <p className="text-sm font-bold text-amber-400">{healthData.alergias.join(', ')}</p>
-              </div>
-              <div>
-                <p className="text-[9px] font-semibold uppercase tracking-wider text-zinc-600">Seguro</p>
-                <p className="text-sm font-bold text-blue-400">{healthData.seguro}</p>
-              </div>
+            )}
+            <div>
+              <h1 className="text-base font-bold text-white">
+                {user?.fullName || 'Paciente'}
+              </h1>
+              <p className="text-[11px] text-white/40">
+                {user?.primaryEmailAddress?.emailAddress}
+              </p>
             </div>
           </div>
 
-          <div className="flex shrink-0 flex-col items-center gap-1.5">
-            <div className="rounded-xl bg-white p-2">
-              <QRCode value={qrPayload} size={80} level="M" />
+          <div className="flex flex-wrap gap-x-4 gap-y-1.5">
+            <div>
+              <p className="text-[9px] font-semibold uppercase tracking-wider text-white/25">Sangre</p>
+              <p className="text-sm font-bold text-red-400">{healthData.tipoSangre}</p>
             </div>
-            <div className="flex items-center gap-1 text-[9px] font-medium text-zinc-600">
-              <ScanLine size={10} />
-              Check-in
+            <div>
+              <p className="text-[9px] font-semibold uppercase tracking-wider text-white/25">Alergias</p>
+              <p className="text-sm font-bold text-amber-400">{healthData.alergias.join(', ')}</p>
+            </div>
+            <div>
+              <p className="text-[9px] font-semibold uppercase tracking-wider text-white/25">Seguro</p>
+              <p className="text-sm font-bold text-blue-400">{healthData.seguro}</p>
             </div>
           </div>
         </div>
 
-        <div className="relative border-t border-zinc-700/50 px-4 py-2">
-          <p className="font-mono text-[9px] text-zinc-600">
+        <div className="relative border-t border-white/[0.06] px-4 py-2">
+          <p className="font-mono text-[9px] text-white/20">
             ID: {patientId.slice(0, 20)}
           </p>
         </div>
-      </div>
+      </motion.div>
+
+      {/* Authority badges */}
+      <motion.div variants={fadeUp} custom={1} className="flex items-center justify-center gap-4 text-[10px] text-white/20">
+        <span className="flex items-center gap-1">
+          <Lock size={10} />
+          Datos protegidos
+        </span>
+        <span>·</span>
+        <span className="flex items-center gap-1">
+          <ShieldCheck size={10} />
+          Cifrado E2E
+        </span>
+        <span>·</span>
+        <span>HIPAA Ready</span>
+      </motion.div>
 
       {/* ── Health Info Grid ───────────────────────────── */}
-      <div>
-        <h3 className="mb-2 text-[11px] font-bold uppercase tracking-wider text-zinc-500">
+      <motion.div variants={fadeUp} custom={2}>
+        <h3 className="mb-2 text-[11px] font-bold uppercase tracking-wider text-white/30">
           Información de Salud
         </h3>
         <div className="grid grid-cols-2 gap-2.5">
           {healthCards.map(({ icon: Icon, label, value, color }) => (
             <div
               key={label}
-              className="rounded-2xl border border-zinc-800 bg-zinc-800/50 p-3.5"
+              className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-3.5 backdrop-blur-sm"
             >
               <div className={`mb-2 flex h-9 w-9 items-center justify-center rounded-xl ${color}`}>
                 <Icon size={18} />
               </div>
-              <p className="text-[10px] font-medium uppercase tracking-wider text-zinc-500">{label}</p>
-              <p className="mt-0.5 text-sm font-bold text-zinc-200">{value}</p>
+              <p className="text-[10px] font-medium uppercase tracking-wider text-white/30">{label}</p>
+              <p className="mt-0.5 text-sm font-bold text-white/80">{value}</p>
             </div>
           ))}
         </div>
-      </div>
+      </motion.div>
 
-      {/* ── QR note ────────────────────────────────────── */}
-      <div className="rounded-2xl border border-dashed border-zinc-700 p-4 text-center">
-        <ScanLine size={24} className="mx-auto text-zinc-600" />
-        <p className="mt-2 text-xs text-zinc-500">
-          Presenta tu código QR en recepción para hacer Check-in rápido
+      {/* Social proof */}
+      <motion.div variants={fadeUp} custom={3} className="text-center">
+        <p className="text-[10px] text-white/20">
+          340+ profesionales confían en Beta Clinic
         </p>
-      </div>
+      </motion.div>
 
       {/* ── Account ────────────────────────────────────── */}
-      <div>
-        <h3 className="mb-2 text-[11px] font-bold uppercase tracking-wider text-zinc-500">
+      <motion.div variants={fadeUp} custom={5}>
+        <h3 className="mb-2 text-[11px] font-bold uppercase tracking-wider text-white/30">
           Cuenta
         </h3>
-        <div className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-800/50">
+        <div className="overflow-hidden rounded-2xl border border-white/[0.06] bg-white/[0.03]">
           <button
             onClick={() => signOut({ redirectUrl: '/' })}
-            className="flex w-full items-center gap-3 px-4 py-3.5 text-left transition-colors active:bg-zinc-800"
+            className="flex w-full items-center gap-3 px-4 py-3.5 text-left transition-colors active:bg-white/[0.08]"
           >
             <LogOut size={18} className="text-red-400" />
             <span className="flex-1 text-sm font-medium text-red-400">Cerrar Sesión</span>
-            <ChevronRight size={16} className="text-zinc-600" />
+            <ChevronRight size={16} className="text-white/20" />
           </button>
         </div>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   )
 }

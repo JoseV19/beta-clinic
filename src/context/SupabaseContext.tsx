@@ -56,43 +56,67 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
 
   /* ── Sync profile ─────────────────────────────────────────────────── */
 
-  const syncProfile = useCallback(
-    async (clerkUser: NonNullable<typeof user>) => {
-      // 1. Try to fetch existing profile
-      const { data: existing } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', clerkUser.id)
-        .maybeSingle()
-
-      if (existing) {
-        setProfile(existing as Profile)
-        return
-      }
-
-      // 2. Profile doesn't exist → create it with Clerk data
+  const buildLocalProfile = useCallback(
+    (clerkUser: NonNullable<typeof user>): Profile => {
       const fullName =
         clerkUser.fullName ??
         [clerkUser.firstName, clerkUser.lastName].filter(Boolean).join(' ') ??
         ''
+      return {
+        id: clerkUser.id,
+        full_name: fullName,
+        role: 'doctor' as AppRole,
+        avatar_url: clerkUser.imageUrl ?? null,
+        phone: clerkUser.primaryPhoneNumber?.phoneNumber ?? null,
+      } as Profile
+    },
+    [],
+  )
 
-      const { data: created } = await supabase
-        .from('profiles')
-        .insert({
-          id: clerkUser.id,
-          full_name: fullName,
-          role: 'patient' as AppRole,
-          avatar_url: clerkUser.imageUrl ?? null,
-          phone: clerkUser.primaryPhoneNumber?.phoneNumber ?? null,
-        })
-        .select()
-        .single()
+  const syncProfile = useCallback(
+    async (clerkUser: NonNullable<typeof user>) => {
+      try {
+        // 1. Try to fetch existing profile
+        const { data: existing, error: fetchErr } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', clerkUser.id)
+          .maybeSingle()
 
-      if (created) {
-        setProfile(created as Profile)
+        if (fetchErr) throw fetchErr
+
+        if (existing) {
+          setProfile(existing as Profile)
+          return
+        }
+
+        // 2. Profile doesn't exist → create it with Clerk data
+        const localProfile = buildLocalProfile(clerkUser)
+
+        const { data: created, error: insertErr } = await supabase
+          .from('profiles')
+          .insert({
+            id: localProfile.id,
+            full_name: localProfile.full_name,
+            role: 'patient' as AppRole,
+            avatar_url: localProfile.avatar_url,
+            phone: localProfile.phone,
+          })
+          .select()
+          .single()
+
+        if (insertErr) throw insertErr
+
+        if (created) {
+          setProfile(created as Profile)
+        }
+      } catch {
+        // Supabase unavailable (401 / network) → fallback to local profile from Clerk data
+        console.warn('[SupabaseContext] Supabase unavailable, using local profile fallback')
+        setProfile(buildLocalProfile(clerkUser))
       }
     },
-    [supabase],
+    [supabase, buildLocalProfile],
   )
 
   /* ── Effect: sync on auth change ──────────────────────────────────── */

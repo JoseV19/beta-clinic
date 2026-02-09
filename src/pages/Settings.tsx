@@ -22,6 +22,7 @@ import {
   type AccentColor,
 } from '../context/SettingsContext'
 import { useClinic, type ClinicType } from '../context/ClinicContext'
+import { useTheme } from '../context/ThemeContext'
 
 /* ── Shared styles ────────────────────────────────────── */
 
@@ -61,6 +62,7 @@ const SPECIALTIES: {
 export default function Settings() {
   const { clinic, setClinic, appearance, setAppearance, clearAllData } = useSettings()
   const { clinicType, setClinicType } = useClinic()
+  const { monochrome, toggleMonochrome } = useTheme()
 
   // Local form state for clinic profile
   const [form, setForm] = useState(clinic)
@@ -255,6 +257,31 @@ export default function Settings() {
           </button>
         </div>
 
+        {/* Monochrome toggle */}
+        <div className="mt-3 flex items-center justify-between rounded-lg border border-omega-violet/10 px-4 py-3 dark:border-clinical-white/10">
+          <div>
+            <p className="text-sm font-medium text-omega-dark dark:text-clinical-white">Modo Monocromático</p>
+            <p className="text-xs text-omega-dark/50 dark:text-clinical-white/40">
+              Cambia todos los colores a escala de grises
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={toggleMonochrome}
+            className={`relative h-6 w-11 rounded-full transition-colors ${
+              monochrome
+                ? 'bg-beta-mint'
+                : 'bg-omega-dark/20 dark:bg-clinical-white/20'
+            }`}
+          >
+            <span
+              className={`absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
+                monochrome ? 'translate-x-5' : 'translate-x-0'
+              }`}
+            />
+          </button>
+        </div>
+
         {/* Accent color selector */}
         <div className="mt-4">
           <p className="mb-2 text-sm font-medium text-omega-dark dark:text-clinical-white">Color de Acento</p>
@@ -301,7 +328,7 @@ export default function Settings() {
           <div>
             <p className="text-sm font-medium text-omega-dark dark:text-clinical-white">Borrar todos los datos</p>
             <p className="text-xs text-omega-dark/50 dark:text-clinical-white/40">
-              Elimina pacientes, citas, finanzas y configuración
+              Elimina pacientes, citas y configuración
             </p>
           </div>
           <button

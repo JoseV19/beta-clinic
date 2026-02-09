@@ -16,19 +16,6 @@ export type AppointmentStatus =
   | 'cancelled'
   | 'no_show'
 
-export type PaymentMethod = 'cash' | 'card' | 'transfer' | 'insurance'
-
-export type TransactionType = 'income' | 'expense'
-
-export type ExpenseCategory =
-  | 'rent'
-  | 'utilities'
-  | 'payroll'
-  | 'supplies'
-  | 'maintenance'
-  | 'marketing'
-  | 'other'
-
 export type PatientStatus = 'active' | 'inactive' | 'archived'
 
 export type InventoryCategory = 'medication' | 'supply' | 'equipment'
@@ -151,24 +138,6 @@ export interface LabOrder {
   notes: string | null
   created_at: string
   updated_at: string
-}
-
-export interface FinanceRecord {
-  id: number
-  type: TransactionType
-  concept: string
-  amount_usd: number
-  amount_gtq: number               // GENERATED — USD × 7.75
-  category: ExpenseCategory | null
-  payment_method: PaymentMethod | null
-  patient_id: number | null
-  appointment_id: number | null
-  treatment_id: number | null
-  voided: boolean
-  receipt_url: string | null
-  date: string
-  notes: string | null
-  created_at: string
 }
 
 export interface Reminder {

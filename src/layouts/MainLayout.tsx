@@ -28,6 +28,7 @@ import {
   Calculator,
   UtensilsCrossed,
   Bell,
+  Contrast,
   type LucideIcon,
 } from 'lucide-react'
 import { Toaster, toast } from 'sonner'
@@ -49,7 +50,7 @@ const baseItems: NavItem[] = [
   { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { to: '/agenda', label: 'Agenda', icon: CalendarDays },
   { to: '/pacientes', label: 'Pacientes', icon: Users },
-  { to: '/finanzas', label: 'Finanzas', icon: DollarSign },
+
 ]
 
 /* ── Specialty-specific items ────────────────────────── */
@@ -102,7 +103,7 @@ export default function MainLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [switchOpen, setSwitchOpen] = useState(false)
   const switchRef = useRef<HTMLDivElement>(null)
-  const { theme, toggleTheme } = useTheme()
+  const { theme, toggleTheme, monochrome, toggleMonochrome } = useTheme()
   const { clinicType, setClinicType } = useClinic()
 
   // Close dropdown on outside click
@@ -232,6 +233,17 @@ export default function MainLayout() {
             {theme === 'dark' ? <Sun size={20} strokeWidth={1.75} /> : <Moon size={20} strokeWidth={1.75} />}
             {theme === 'dark' ? 'Modo Claro' : 'Modo Oscuro'}
           </button>
+          <button
+            onClick={toggleMonochrome}
+            className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
+              monochrome
+                ? 'bg-clinical-white/15 text-clinical-white'
+                : 'text-clinical-white/70 hover:bg-clinical-white/10 hover:text-clinical-white'
+            }`}
+          >
+            <Contrast size={20} strokeWidth={1.75} />
+            {monochrome ? 'Modo Color' : 'Monocromático'}
+          </button>
           <div className="flex items-center gap-3 rounded-lg px-3 py-2">
             <UserButton
               afterSignOutUrl="/"
@@ -255,6 +267,9 @@ export default function MainLayout() {
           </button>
           <img src="/beta-logo.png" alt="Beta Clinic" className="ml-3 h-7 w-auto object-contain" />
           <div className="ml-auto flex items-center gap-3">
+            <button onClick={toggleMonochrome} className={`transition-colors ${monochrome ? 'text-omega-dark dark:text-clinical-white' : 'text-omega-dark/60 dark:text-clinical-white/60'}`}>
+              <Contrast size={18} />
+            </button>
             <button onClick={toggleTheme} className="text-omega-dark/60 dark:text-clinical-white/60">
               {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
             </button>

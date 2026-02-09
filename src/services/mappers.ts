@@ -1,15 +1,11 @@
 import type { Patient } from '../data/patients'
-import type { Transaction, MetodoPago, CategoriaGasto, Appointment } from '../context/DataContext'
+import type { Appointment } from '../context/DataContext'
 import type {
   Patient as DbPatient,
-  FinanceRecord,
   Appointment as DbAppointment,
   InventoryItem,
   DentalLab as DbDentalLab,
   LabOrder as DbLabOrder,
-  PaymentMethod,
-  ExpenseCategory,
-  TransactionType,
   PatientStatus,
   InventoryCategory,
   LabOrderStatus,
@@ -78,83 +74,6 @@ export function frontendPatientToDb(
     allergies: fe.antecedentes ? fe.antecedentes.split(',').map((s) => s.trim()) : [],
     last_visit: fe.ultimaVisita || null,
     status: statusToDb[fe.estado] ?? 'active',
-  }
-}
-
-/* ── Finance / Transaction ────────────────────────────────────────────────── */
-
-const tipoToFrontend: Record<TransactionType, 'ingreso' | 'gasto'> = {
-  income: 'ingreso',
-  expense: 'gasto',
-}
-
-const tipoToDb: Record<string, TransactionType> = {
-  ingreso: 'income',
-  gasto: 'expense',
-}
-
-const metodoToFrontend: Record<PaymentMethod, MetodoPago> = {
-  cash: 'efectivo',
-  card: 'tarjeta',
-  transfer: 'transferencia',
-  insurance: 'seguro',
-}
-
-const metodoToDb: Record<MetodoPago, PaymentMethod> = {
-  efectivo: 'cash',
-  tarjeta: 'card',
-  transferencia: 'transfer',
-  seguro: 'insurance',
-}
-
-const categoriaToFrontend: Record<ExpenseCategory, CategoriaGasto> = {
-  rent: 'alquiler',
-  utilities: 'servicios',
-  payroll: 'nomina',
-  supplies: 'insumos',
-  maintenance: 'mantenimiento',
-  marketing: 'marketing',
-  other: 'otro',
-}
-
-const categoriaToDb: Record<CategoriaGasto, ExpenseCategory> = {
-  alquiler: 'rent',
-  servicios: 'utilities',
-  nomina: 'payroll',
-  insumos: 'supplies',
-  mantenimiento: 'maintenance',
-  marketing: 'marketing',
-  otro: 'other',
-}
-
-export function dbFinanceToFrontend(db: FinanceRecord): Transaction {
-  return {
-    id: db.id,
-    fecha: db.date,
-    concepto: db.concept,
-    monto: db.amount_usd,
-    tipo: tipoToFrontend[db.type] ?? 'ingreso',
-    metodo: db.payment_method ? metodoToFrontend[db.payment_method] : undefined,
-    paciente: db.notes ?? undefined,
-    anulado: db.voided,
-    categoria: db.category ? categoriaToFrontend[db.category] : undefined,
-    comprobante: db.receipt_url ?? undefined,
-  }
-}
-
-export function frontendTransactionToDb(
-  fe: Omit<Transaction, 'id'>,
-): Record<string, unknown> {
-  return {
-    type: tipoToDb[fe.tipo] ?? 'income',
-    concept: fe.concepto,
-    amount_usd: fe.monto,
-    date: fe.fecha,
-    payment_method: fe.metodo ? metodoToDb[fe.metodo] : null,
-    category: fe.categoria ? categoriaToDb[fe.categoria] : null,
-    voided: fe.anulado ?? false,
-    receipt_url: fe.comprobante ?? null,
-    notes: fe.paciente ?? null,
   }
 }
 

@@ -24,8 +24,20 @@ createRoot(document.getElementById('root')!).render(
         baseTheme: dark,
         variables: {
           colorPrimary: '#7FFFD4',
-          colorBackground: '#1a1a2e',
-          colorText: '#ffffff',
+          colorBackground: '#0B0613',
+          colorText: '#F8F9FA',
+          colorInputBackground: 'rgba(255,255,255,0.03)',
+          colorInputText: '#F8F9FA',
+          borderRadius: '0.75rem',
+        },
+        elements: {
+          cardBox: 'bg-transparent shadow-none',
+          formButtonPrimary: 'bg-[#7FFFD4] text-[#0B0613] hover:bg-[#7FFFD4]/90 font-semibold rounded-xl shadow-lg',
+          formFieldInput: 'bg-white/[0.05] border-white/[0.08] rounded-xl',
+          socialButtonsBlockButton: 'bg-white/[0.05] border-white/[0.08] hover:bg-white/10 rounded-xl',
+          footerActionLink: 'text-[#7FFFD4] hover:text-[#7FFFD4]/80',
+          dividerLine: 'bg-white/10',
+          dividerText: 'text-white/30',
         },
       }}
     >
