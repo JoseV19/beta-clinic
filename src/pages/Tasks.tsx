@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
+import { motion, AnimatePresence } from 'framer-motion'
 import {
   DndContext,
   DragOverlay,
@@ -19,8 +20,10 @@ import {
   ChevronLeft,
   ChevronRight,
   GripVertical,
+  Trash2,
 } from 'lucide-react'
 import { usePersistentState } from '../hooks/usePersistentState'
+import ConfirmDialog from '../components/ui/ConfirmDialog'
 
 /* ── Types ─────────────────────────────────────────────── */
 
@@ -113,10 +116,12 @@ function DroppableColumn(props: Omit<Parameters<typeof KanbanColumn>[0], 'isOver
 function TaskCard({
   task,
   onMove,
+  onDelete,
   overlay,
 }: {
   task: Task
   onMove: (id: number, to: ColumnId) => void
+  onDelete?: (id: number) => void
   overlay?: boolean
 }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
@@ -164,13 +169,24 @@ function TaskCard({
         </span>
       </div>
 
-      {/* Move arrows */}
+      {/* Move arrows + delete */}
       {!overlay && (
-        <div className="mt-2 flex justify-end gap-1 border-t border-omega-violet/10 pt-2 dark:border-clinical-white/5">
+        <div className="mt-2 flex items-center justify-end gap-1 border-t border-omega-violet/10 pt-2 dark:border-clinical-white/5">
+          {onDelete && (
+            <button
+              onClick={() => onDelete(task.id)}
+              title="Eliminar tarea"
+              aria-label="Eliminar tarea"
+              className="mr-auto rounded p-1 text-omega-dark/20 transition-colors hover:bg-red-500/10 hover:text-red-400 dark:text-clinical-white/15 dark:hover:text-red-400"
+            >
+              <Trash2 size={13} />
+            </button>
+          )}
           {colIdx > 0 && (
             <button
               onClick={() => onMove(task.id, columnDefs[colIdx - 1].id)}
               title={`Mover a ${columnDefs[colIdx - 1].label}`}
+              aria-label={`Mover a ${columnDefs[colIdx - 1].label}`}
               className="rounded p-1 text-omega-dark/25 transition-colors hover:bg-omega-violet/10 hover:text-omega-dark dark:text-clinical-white/20 dark:hover:bg-clinical-white/10 dark:hover:text-clinical-white"
             >
               <ChevronLeft size={14} />
@@ -180,6 +196,7 @@ function TaskCard({
             <button
               onClick={() => onMove(task.id, columnDefs[colIdx + 1].id)}
               title={`Mover a ${columnDefs[colIdx + 1].label}`}
+              aria-label={`Mover a ${columnDefs[colIdx + 1].label}`}
               className="rounded p-1 text-omega-dark/25 transition-colors hover:bg-omega-violet/10 hover:text-omega-dark dark:text-clinical-white/20 dark:hover:bg-clinical-white/10 dark:hover:text-clinical-white"
             >
               <ChevronRight size={14} />
@@ -218,10 +235,19 @@ function NewTaskModal({
     'w-full rounded-lg border border-omega-violet/20 bg-clinical-white px-3 py-2 text-sm text-omega-dark outline-none focus:border-omega-violet/40 focus:ring-2 focus:ring-omega-violet/10 dark:border-clinical-white/10 dark:bg-omega-abyss dark:text-clinical-white dark:focus:border-beta-mint/30 dark:focus:ring-beta-mint/10'
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+    >
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
 
-      <form
+      <motion.form
+        initial={{ opacity: 0, scale: 0.92 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.92 }}
+        transition={{ duration: 0.15 }}
         onSubmit={handleSubmit}
         className="relative w-full max-w-md rounded-2xl border border-omega-violet/20 bg-white p-6 shadow-xl dark:border-clinical-white/10 dark:bg-omega-surface"
       >
@@ -309,8 +335,8 @@ function NewTaskModal({
             Crear Tarea
           </button>
         </div>
-      </form>
-    </div>
+      </motion.form>
+    </motion.div>
   )
 }
 
@@ -320,6 +346,7 @@ export default function Tasks() {
   const [tasks, setTasks] = usePersistentState<Task[]>('beta_tasks', defaultTasks)
   const [activeId, setActiveId] = useState<number | null>(null)
   const [modalOpen, setModalOpen] = useState(false)
+  const [deleteTaskId, setDeleteTaskId] = useState<number | null>(null)
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -358,6 +385,13 @@ export default function Tasks() {
     toast.success('Tarea creada')
   }
 
+  function handleDeleteTask() {
+    if (deleteTaskId == null) return
+    setTasks((prev) => prev.filter((t) => t.id !== deleteTaskId))
+    setDeleteTaskId(null)
+    toast.success('Tarea eliminada')
+  }
+
   return (
     <div className="flex h-full flex-col">
       {/* Header */}
@@ -391,7 +425,7 @@ export default function Tasks() {
             return (
               <DroppableColumn key={col.id} id={col.id} label={col.label} accent={col.accent} count={colTasks.length}>
                 {colTasks.map((t) => (
-                  <TaskCard key={t.id} task={t} onMove={moveTask} />
+                  <TaskCard key={t.id} task={t} onMove={moveTask} onDelete={setDeleteTaskId} />
                 ))}
                 {colTasks.length === 0 && (
                   <p className="py-10 text-center text-xs text-omega-dark/25 dark:text-clinical-white/15">
@@ -409,7 +443,20 @@ export default function Tasks() {
       </DndContext>
 
       {/* Modal */}
-      {modalOpen && <NewTaskModal onClose={() => setModalOpen(false)} onSave={handleAdd} />}
+      <AnimatePresence>
+        {modalOpen && <NewTaskModal onClose={() => setModalOpen(false)} onSave={handleAdd} />}
+      </AnimatePresence>
+
+      {/* Delete confirmation */}
+      <ConfirmDialog
+        open={deleteTaskId != null}
+        title="Eliminar tarea"
+        message="¿Estás seguro de que deseas eliminar esta tarea?"
+        confirmLabel="Eliminar"
+        variant="danger"
+        onConfirm={handleDeleteTask}
+        onCancel={() => setDeleteTaskId(null)}
+      />
     </div>
   )
 }

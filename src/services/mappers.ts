@@ -1,5 +1,4 @@
 import type { Patient } from '../data/patients'
-import type { Appointment } from '../context/DataContext'
 import type {
   Patient as DbPatient,
   Appointment as DbAppointment,
@@ -79,9 +78,17 @@ export function frontendPatientToDb(
 
 /* ── Appointment ──────────────────────────────────────────────────────────── */
 
+/** Legacy format kept for Supabase backward compat — not used by UI anymore */
+export interface LegacyAppointment {
+  patient: string
+  time: string
+  doctor: string
+  status: string
+}
+
 export function dbAppointmentToFrontend(
   db: DbAppointment & { patient_name?: string; doctor_name?: string },
-): Appointment {
+): LegacyAppointment {
   const time = new Date(db.start_time).toLocaleTimeString('es-GT', {
     hour: '2-digit',
     minute: '2-digit',

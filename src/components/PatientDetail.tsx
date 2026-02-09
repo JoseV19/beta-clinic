@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import {
   ArrowLeft,
@@ -6,16 +6,20 @@ import {
   ClipboardList,
   Pill,
   FlaskConical,
+  FileBarChart,
   Save,
   MessageCircle,
 } from 'lucide-react'
+import { toast } from 'sonner'
 import { useData } from '../context/DataContext'
+import type { Consultation, SoapNotes } from '../types/phase2'
+import CIE10Autocomplete from './ui/CIE10Autocomplete'
 
 /* ── WhatsApp helper ───────────────────────────────────── */
 
 function cleanPhone(phone: string) {
   const digits = phone.replace(/\D/g, '')
-  return digits.startsWith('57') ? digits : '57' + digits
+  return digits.startsWith('502') ? digits : '502' + digits
 }
 
 function WaIcon({ size = 16 }: { size?: number }) {
@@ -33,28 +37,10 @@ const tabs = [
   { key: 'historial', label: 'Historial Consultas', icon: ClipboardList },
   { key: 'recetas', label: 'Recetas', icon: Pill },
   { key: 'laboratorios', label: 'Laboratorios', icon: FlaskConical },
+  { key: 'facturacion', label: 'Facturación', icon: FileBarChart },
 ] as const
 
 type TabKey = (typeof tabs)[number]['key']
-
-/* ── Mock history ──────────────────────────────────────── */
-
-const mockHistory = [
-  { fecha: '2026-02-03', motivo: 'Control general', doctor: 'Dr. Rodríguez', diagnostico: 'Hipertensión leve' },
-  { fecha: '2026-01-15', motivo: 'Dolor lumbar', doctor: 'Dra. Martínez', diagnostico: 'Lumbalgia mecánica' },
-  { fecha: '2025-12-10', motivo: 'Revisión anual', doctor: 'Dr. Rodríguez', diagnostico: 'Sin hallazgos' },
-]
-
-const mockRecetas = [
-  { fecha: '2026-02-03', medicamento: 'Losartán 50 mg', dosis: '1 tableta/día', duracion: '30 días' },
-  { fecha: '2026-01-15', medicamento: 'Ibuprofeno 400 mg', dosis: '1 c/8 h', duracion: '5 días' },
-]
-
-const mockLabs = [
-  { fecha: '2026-01-20', examen: 'Hemograma completo', resultado: 'Normal', doctor: 'Dr. Rodríguez' },
-  { fecha: '2026-01-20', examen: 'Glicemia en ayunas', resultado: '92 mg/dL', doctor: 'Dr. Rodríguez' },
-  { fecha: '2025-12-10', examen: 'Perfil lipídico', resultado: 'Colesterol total 210 mg/dL', doctor: 'Dr. Rodríguez' },
-]
 
 /* ── Shared table styles ───────────────────────────────── */
 
@@ -67,25 +53,42 @@ const tableWrapClass = 'overflow-x-auto rounded-lg border border-omega-violet/10
 
 /* ── SOAP form ─────────────────────────────────────────── */
 
-function SoapForm() {
-  const [form, setForm] = useState({ subjetivo: '', objetivo: '', analisis: '', plan: '' })
+function SoapForm({ patientId, patientName, onSave }: { patientId: number; patientName: string; onSave: (c: Omit<Consultation, 'id' | 'createdAt' | 'updatedAt'>) => void }) {
+  const [form, setForm] = useState<SoapNotes>({ subjetivo: '', objetivo: '', analisis: '', plan: '' })
+  const [cie10Codes, setCie10Codes] = useState<{ codigo: string; descripcion: string }[]>([])
   const [saved, setSaved] = useState(false)
 
-  function handleChange(field: keyof typeof form, value: string) {
+  function handleChange(field: keyof SoapNotes, value: string) {
     setForm((f) => ({ ...f, [field]: value }))
     setSaved(false)
   }
 
   function handleSave(e: React.FormEvent) {
     e.preventDefault()
+    const today = new Date()
+    onSave({
+      patientId,
+      patientName,
+      fecha: today.toISOString().split('T')[0],
+      hora: today.toTimeString().slice(0, 5),
+      motivo: form.subjetivo.slice(0, 60) || 'Consulta',
+      tipo: 'general',
+      doctor: '',
+      estado: 'completada',
+      soap: form,
+      diagnosticoCIE10: cie10Codes.length > 0 ? cie10Codes : undefined,
+    })
     setSaved(true)
+    toast.success('Consulta guardada')
+    setForm({ subjetivo: '', objetivo: '', analisis: '', plan: '' })
+    setCie10Codes([])
   }
 
-  const fields: { key: keyof typeof form; label: string; placeholder: string }[] = [
-    { key: 'subjetivo', label: 'Subjetivo (S)', placeholder: 'Motivo de consulta, síntomas reportados por el paciente…' },
-    { key: 'objetivo', label: 'Objetivo (O)', placeholder: 'Signos vitales, hallazgos del examen físico…' },
-    { key: 'analisis', label: 'Análisis (A)', placeholder: 'Diagnóstico diferencial, interpretación clínica…' },
-    { key: 'plan', label: 'Plan (P)', placeholder: 'Tratamiento, medicamentos, seguimiento…' },
+  const fields: { key: keyof SoapNotes; label: string; placeholder: string }[] = [
+    { key: 'subjetivo', label: 'Subjetivo (S)', placeholder: 'Motivo de consulta, síntomas reportados por el paciente...' },
+    { key: 'objetivo', label: 'Objetivo (O)', placeholder: 'Signos vitales, hallazgos del examen físico...' },
+    { key: 'analisis', label: 'Análisis (A)', placeholder: 'Diagnóstico diferencial, interpretación clínica...' },
+    { key: 'plan', label: 'Plan (P)', placeholder: 'Tratamiento, medicamentos, seguimiento...' },
   ]
 
   return (
@@ -101,14 +104,23 @@ function SoapForm() {
             placeholder={placeholder}
             className="w-full rounded-lg border border-omega-violet/20 bg-clinical-white px-3 py-2 text-sm text-omega-dark outline-none transition-shadow placeholder:text-omega-dark/30 focus:border-omega-violet/40 focus:ring-2 focus:ring-omega-violet/10 dark:border-clinical-white/10 dark:bg-omega-abyss dark:text-clinical-white dark:placeholder:text-clinical-white/25 dark:focus:border-beta-mint/30 dark:focus:ring-beta-mint/10"
           />
+          {key === 'analisis' && (
+            <div className="mt-3">
+              <label className="mb-1.5 block text-xs font-medium text-omega-dark/60 dark:text-clinical-white/40">
+                Diagnóstico CIE-10
+              </label>
+              <CIE10Autocomplete
+                selectedCodes={cie10Codes}
+                onCodesChange={(codes) => { setCie10Codes(codes); setSaved(false) }}
+                maxCodes={5}
+              />
+            </div>
+          )}
         </div>
       ))}
 
       <div className="flex items-center gap-3">
-        <button
-          type="submit"
-          className="flex items-center gap-2 rounded-lg bg-beta-mint px-5 py-2.5 text-sm font-semibold text-omega-dark transition-colors hover:bg-beta-mint/80"
-        >
+        <button type="submit" className="flex items-center gap-2 rounded-lg bg-beta-mint px-5 py-2.5 text-sm font-semibold text-omega-dark transition-colors hover:bg-beta-mint/80">
           <Save size={16} />
           Guardar Nota
         </button>
@@ -145,104 +157,192 @@ function InfoTab({ patient }: { patient: ReturnType<typeof useData>['patients'][
   )
 }
 
-function HistorialTab() {
+function HistorialTab({ patientId, patientName }: { patientId: number; patientName: string }) {
+  const { consultations, addConsultation } = useData()
+  const patientConsults = useMemo(
+    () => consultations.filter(c => c.patientId === patientId).sort((a, b) => b.fecha.localeCompare(a.fecha)),
+    [consultations, patientId],
+  )
+
   return (
     <div className="space-y-6">
-      <div className={tableWrapClass}>
-        <table className="w-full text-left text-sm">
-          <thead>
-            <tr className={theadRowClass}>
-              <th className={thClass}>Fecha</th>
-              <th className={thClass}>Motivo</th>
-              <th className={`hidden sm:table-cell ${thClass}`}>Doctor</th>
-              <th className={thClass}>Diagnóstico</th>
-            </tr>
-          </thead>
-          <tbody>
-            {mockHistory.map((h, i) => (
-              <tr key={i} className={tbodyRowClass}>
-                <td className={tdClass}>{h.fecha}</td>
-                <td className={tdBoldClass}>{h.motivo}</td>
-                <td className={`hidden sm:table-cell ${tdClass}`}>{h.doctor}</td>
-                <td className={tdClass}>{h.diagnostico}</td>
+      {patientConsults.length > 0 ? (
+        <div className={tableWrapClass}>
+          <table className="w-full text-left text-sm">
+            <thead>
+              <tr className={theadRowClass}>
+                <th className={thClass}>Fecha</th>
+                <th className={thClass}>Motivo</th>
+                <th className={`hidden sm:table-cell ${thClass}`}>Doctor</th>
+                <th className={thClass}>Diagnóstico</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody>
+              {patientConsults.map((c) => (
+                <tr key={c.id} className={tbodyRowClass}>
+                  <td className={tdClass}>{c.fecha}</td>
+                  <td className={tdBoldClass}>{c.motivo}</td>
+                  <td className={`hidden sm:table-cell ${tdClass}`}>{c.doctor}</td>
+                  <td className={tdClass}>
+                    {c.diagnosticoCIE10?.map(dx => `${dx.codigo} ${dx.descripcion}`).join(', ') ||
+                     c.soap?.analisis?.slice(0, 50) || '—'}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <p className="text-sm text-omega-dark/40 dark:text-clinical-white/30">
+          Sin consultas registradas para este paciente.
+        </p>
+      )}
 
       <div className="rounded-xl border border-omega-violet/20 bg-white p-5 dark:border-clinical-white/10 dark:bg-omega-surface">
-        <SoapForm />
+        <SoapForm patientId={patientId} patientName={patientName} onSave={addConsultation} />
       </div>
     </div>
   )
 }
 
 function RecetasTab({ patient }: { patient: ReturnType<typeof useData>['patients'][number] }) {
+  const { consultations } = useData()
+  const prescriptions = useMemo(
+    () => consultations
+      .filter(c => c.patientId === patient.id && c.soap?.plan)
+      .sort((a, b) => b.fecha.localeCompare(a.fecha)),
+    [consultations, patient.id],
+  )
+
   function handleWhatsAppReceta() {
     const phone = cleanPhone(patient.telefono)
-    const medList = mockRecetas
-      .map((r) => `- ${r.medicamento}: ${r.dosis} por ${r.duracion}`)
+    const medList = prescriptions
+      .slice(0, 3)
+      .map((r) => `- ${r.fecha}: ${r.soap!.plan.slice(0, 100)}`)
       .join('\n')
-    const message = `Hola ${patient.nombre.split(' ')[0]}, aquí está el resumen de su receta:\n${medList}\nAtt: Dr. Rodríguez — Beta Clinic`
+    const message = `Hola ${patient.nombre.split(' ')[0]}, aquí está el resumen de su tratamiento:\n${medList}\nAtt: Beta Clinic`
     window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, '_blank')
   }
 
   return (
     <div className="space-y-4">
-      <div className={tableWrapClass}>
-        <table className="w-full text-left text-sm">
-          <thead>
-            <tr className={theadRowClass}>
-              <th className={thClass}>Fecha</th>
-              <th className={thClass}>Medicamento</th>
-              <th className={thClass}>Dosis</th>
-              <th className={`hidden sm:table-cell ${thClass}`}>Duración</th>
-            </tr>
-          </thead>
-          <tbody>
-            {mockRecetas.map((r, i) => (
-              <tr key={i} className={tbodyRowClass}>
-                <td className={tdClass}>{r.fecha}</td>
-                <td className={tdBoldClass}>{r.medicamento}</td>
-                <td className={tdClass}>{r.dosis}</td>
-                <td className={`hidden sm:table-cell ${tdClass}`}>{r.duracion}</td>
+      {prescriptions.length > 0 ? (
+        <div className={tableWrapClass}>
+          <table className="w-full text-left text-sm">
+            <thead>
+              <tr className={theadRowClass}>
+                <th className={thClass}>Fecha</th>
+                <th className={thClass}>Motivo</th>
+                <th className={thClass}>Plan / Receta</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody>
+              {prescriptions.map((r) => (
+                <tr key={r.id} className={tbodyRowClass}>
+                  <td className={tdClass}>{r.fecha}</td>
+                  <td className={tdBoldClass}>{r.motivo}</td>
+                  <td className={tdClass}>{r.soap!.plan.slice(0, 120)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <p className="text-sm text-omega-dark/40 dark:text-clinical-white/30">Sin recetas registradas.</p>
+      )}
 
-      <button
-        onClick={handleWhatsAppReceta}
-        className="flex items-center gap-2 rounded-lg border border-[#25D366]/30 bg-[#25D366]/10 px-4 py-2.5 text-sm font-semibold text-[#25D366] transition-colors hover:bg-[#25D366]/20"
-      >
-        <WaIcon size={18} />
-        Enviar Receta por WhatsApp
-      </button>
+      {prescriptions.length > 0 && (
+        <button
+          onClick={handleWhatsAppReceta}
+          className="flex items-center gap-2 rounded-lg border border-[#25D366]/30 bg-[#25D366]/10 px-4 py-2.5 text-sm font-semibold text-[#25D366] transition-colors hover:bg-[#25D366]/20"
+        >
+          <WaIcon size={18} />
+          Enviar Receta por WhatsApp
+        </button>
+      )}
     </div>
   )
 }
 
-function LaboratoriosTab() {
+function LaboratoriosTab({ patientId }: { patientId: number }) {
+  const { appointments } = useData()
+  const labs = useMemo(
+    () => appointments
+      .filter(a => a.patientId === patientId && a.tipo === 'laboratorio')
+      .sort((a, b) => b.fecha.localeCompare(a.fecha)),
+    [appointments, patientId],
+  )
+
+  if (labs.length === 0) {
+    return <p className="text-sm text-omega-dark/40 dark:text-clinical-white/30">Sin laboratorios registrados.</p>
+  }
+
   return (
     <div className={tableWrapClass}>
       <table className="w-full text-left text-sm">
         <thead>
           <tr className={theadRowClass}>
             <th className={thClass}>Fecha</th>
-            <th className={thClass}>Examen</th>
-            <th className={thClass}>Resultado</th>
+            <th className={thClass}>Tipo</th>
+            <th className={thClass}>Estado</th>
             <th className={`hidden sm:table-cell ${thClass}`}>Doctor</th>
           </tr>
         </thead>
         <tbody>
-          {mockLabs.map((l, i) => (
-            <tr key={i} className={tbodyRowClass}>
+          {labs.map((l) => (
+            <tr key={l.id} className={tbodyRowClass}>
               <td className={tdClass}>{l.fecha}</td>
-              <td className={tdBoldClass}>{l.examen}</td>
-              <td className={tdClass}>{l.resultado}</td>
+              <td className={tdBoldClass}>{l.notas ?? 'Laboratorio'}</td>
+              <td className={tdClass}>{l.estado}</td>
               <td className={`hidden sm:table-cell ${tdClass}`}>{l.doctor}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+function FacturacionTab({ patientId }: { patientId: number }) {
+  const { invoices } = useData()
+  const patientInvoices = useMemo(
+    () => invoices.filter(i => i.pacienteId === patientId).sort((a, b) => b.fecha.localeCompare(a.fecha)),
+    [invoices, patientId],
+  )
+
+  const estadoBadge: Record<string, string> = {
+    pagada: 'bg-beta-mint/15 text-emerald-700 dark:text-beta-mint',
+    emitida: 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400',
+    borrador: 'bg-gray-100 text-gray-600 dark:bg-clinical-white/10 dark:text-clinical-white/60',
+    anulada: 'bg-alert-red/10 text-alert-red',
+  }
+
+  if (patientInvoices.length === 0) {
+    return <p className="text-sm text-omega-dark/40 dark:text-clinical-white/30">Sin facturas para este paciente.</p>
+  }
+
+  return (
+    <div className={tableWrapClass}>
+      <table className="w-full text-left text-sm">
+        <thead>
+          <tr className={theadRowClass}>
+            <th className={thClass}>Número</th>
+            <th className={thClass}>Fecha</th>
+            <th className={thClass}>Total</th>
+            <th className={thClass}>Estado</th>
+          </tr>
+        </thead>
+        <tbody>
+          {patientInvoices.map((inv) => (
+            <tr key={inv.id} className={tbodyRowClass}>
+              <td className={tdBoldClass}>{inv.numero}</td>
+              <td className={tdClass}>{inv.fecha}</td>
+              <td className={tdClass}>${inv.total.toFixed(2)}</td>
+              <td className={tdClass}>
+                <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-medium ${estadoBadge[inv.estado] ?? ''}`}>
+                  {inv.estado}
+                </span>
+              </td>
             </tr>
           ))}
         </tbody>
@@ -335,9 +435,10 @@ export default function PatientDetail() {
       {/* Tab content */}
       <div>
         {activeTab === 'info' && <InfoTab patient={patient} />}
-        {activeTab === 'historial' && <HistorialTab />}
+        {activeTab === 'historial' && <HistorialTab patientId={patient.id} patientName={patient.nombre} />}
         {activeTab === 'recetas' && <RecetasTab patient={patient} />}
-        {activeTab === 'laboratorios' && <LaboratoriosTab />}
+        {activeTab === 'laboratorios' && <LaboratoriosTab patientId={patient.id} />}
+        {activeTab === 'facturacion' && <FacturacionTab patientId={patient.id} />}
       </div>
     </div>
   )

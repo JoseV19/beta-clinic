@@ -38,6 +38,10 @@ import PublicBooking from './pages/PublicBooking'
 import Checkout from './pages/Checkout'
 import PatientSignUp from './pages/auth/PatientSignUp'
 import PatientOnboarding from './pages/auth/PatientOnboarding'
+import Facturacion from './pages/Facturacion'
+import Reportes from './pages/Reportes'
+import DoctorPortalView from './pages/DoctorPortalView'
+import NotFound from './pages/NotFound'
 
 /* ── Onboarding guard ─────────────────────────────────── */
 
@@ -129,6 +133,10 @@ function App() {
 
         {/* ═══════ DOCTOR / ADMIN — auth + onboarding + role ═══════ */}
         <Route element={<RoleGuard allowedRoles={['doctor', 'admin']} />}>
+          {/* Fullscreen portal preview — outside MainLayout */}
+          <Route element={<RequireOnboarding />}>
+            <Route path="/portal-paciente" element={<DoctorPortalView />} />
+          </Route>
           <Route element={<RequireOnboarding />}>
             <Route element={<MainLayout />}>
               <Route path="/dashboard" element={<Dashboard />} />
@@ -145,6 +153,8 @@ function App() {
               <Route path="/laboratorios" element={<Laboratorios />} />
               <Route path="/inventario" element={<Inventory />} />
               <Route path="/tareas" element={<Tasks />} />
+              <Route path="/facturacion" element={<Facturacion />} />
+              <Route path="/reportes" element={<Reportes />} />
               <Route path="/configuracion" element={<Settings />} />
               <Route path="/configuracion/clinica" element={<ClinicSettings />} />
               {/* Specialty: Dental */}
@@ -169,7 +179,7 @@ function App() {
         </Route>
 
         {/* ═══════ Fallback ═══════ */}
-        <Route path="*" element={<Navigate to="/" replace />} />
+        <Route path="*" element={<NotFound />} />
       </Routes>
     </BrowserRouter>
   )

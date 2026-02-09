@@ -29,12 +29,18 @@ import {
   UtensilsCrossed,
   Bell,
   Contrast,
+  Search,
+  Smartphone,
   type LucideIcon,
 } from 'lucide-react'
 import { Toaster, toast } from 'sonner'
 import { useTheme } from '../context/ThemeContext'
 import { useClinic, type ClinicType } from '../context/ClinicContext'
 import BetaAssistant from '../components/BetaAssistant'
+import ErrorBoundary from '../components/ui/ErrorBoundary'
+import CommandPalette from '../components/CommandPalette'
+import NotificationCenter from '../components/NotificationCenter'
+import { useNotificationGenerator } from '../hooks/useNotificationGenerator'
 
 /* ── Nav item type ───────────────────────────────────── */
 
@@ -88,12 +94,15 @@ const QUICK_SWITCH: { type: ClinicType; label: string; icon: LucideIcon }[] = [
 /* ── Shared items (all clinic types, after specialty) ── */
 
 const sharedItems: NavItem[] = [
+  { to: '/facturacion', label: 'Facturación', icon: FileBarChart },
+  { to: '/reportes', label: 'Reportes', icon: TrendingUp },
   { to: '/telemedicina', label: 'Telemedicina', icon: Video },
   { to: '/recordatorios', label: 'Recordatorios', icon: Bell },
   { to: '/reportes-rips', label: 'Reportes RIPS', icon: FileBarChart },
   { to: '/inventario', label: 'Inventario', icon: Package },
   { to: '/tareas', label: 'Tareas', icon: ClipboardCheck },
   { to: '/directorio', label: 'Directorio', icon: Contact },
+  { to: '/portal-paciente', label: 'Portal Paciente', icon: Smartphone },
   { to: '/configuracion', label: 'Configuración', icon: Settings },
 ]
 
@@ -105,6 +114,9 @@ export default function MainLayout() {
   const switchRef = useRef<HTMLDivElement>(null)
   const { theme, toggleTheme, monochrome, toggleMonochrome } = useTheme()
   const { clinicType, setClinicType } = useClinic()
+
+  // Auto-generate notifications
+  useNotificationGenerator()
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -224,6 +236,20 @@ export default function MainLayout() {
           ))}
         </nav>
 
+        {/* ⌘K hint */}
+        <div className="mx-3 mb-2">
+          <button
+            onClick={() => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: true }))}
+            className="flex w-full items-center justify-between rounded-lg border border-clinical-white/[0.06] bg-clinical-white/[0.03] px-3 py-2 text-xs text-clinical-white/40 transition-colors hover:bg-clinical-white/5 hover:text-clinical-white/60"
+          >
+            <div className="flex items-center gap-2">
+              <Search size={14} />
+              <span>Buscar...</span>
+            </div>
+            <kbd className="rounded border border-clinical-white/10 bg-clinical-white/5 px-1.5 py-0.5 text-[10px] font-medium">⌘K</kbd>
+          </button>
+        </div>
+
         {/* Theme toggle + User */}
         <div className="space-y-3 px-3 pb-4">
           <button
@@ -245,6 +271,7 @@ export default function MainLayout() {
             {monochrome ? 'Modo Color' : 'Monocromático'}
           </button>
           <div className="flex items-center gap-3 rounded-lg px-3 py-2">
+            <NotificationCenter />
             <UserButton
               afterSignOutUrl="/"
               appearance={{
@@ -266,7 +293,8 @@ export default function MainLayout() {
             <Menu size={22} className="text-omega-dark dark:text-clinical-white" />
           </button>
           <img src="/beta-logo.png" alt="Beta Clinic" className="ml-3 h-7 w-auto object-contain" />
-          <div className="ml-auto flex items-center gap-3">
+          <div className="ml-auto flex items-center gap-2">
+            <NotificationCenter />
             <button onClick={toggleMonochrome} className={`transition-colors ${monochrome ? 'text-omega-dark dark:text-clinical-white' : 'text-omega-dark/60 dark:text-clinical-white/60'}`}>
               <Contrast size={18} />
             </button>
@@ -286,7 +314,9 @@ export default function MainLayout() {
 
         {/* Page content */}
         <main className="flex-1 overflow-y-auto bg-clinical-white p-6 dark:bg-omega-abyss">
-          <Outlet />
+          <ErrorBoundary>
+            <Outlet />
+          </ErrorBoundary>
         </main>
 
         <BetaAssistant />
@@ -307,6 +337,8 @@ export default function MainLayout() {
           }}
         />
       </div>
+
+      <CommandPalette />
     </div>
   )
 }

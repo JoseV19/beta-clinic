@@ -4,12 +4,15 @@ import {
   ComposedChart,
   Area,
   Line,
+  Scatter,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
   type TooltipContentProps,
 } from 'recharts'
+import { Plus, Trash2 } from 'lucide-react'
+import { toast } from 'sonner'
 import {
   weightForAgeBoys,
   lengthHeightForAgeBoys,
@@ -18,6 +21,7 @@ import {
 import { useTheme } from '../../context/ThemeContext'
 import { useClinic } from '../../context/ClinicContext'
 import { THEME_CONFIG } from '../../data/themeConfig'
+import { usePersistentState } from '../../hooks/usePersistentState'
 
 /* ── Types ─────────────────────────────────────────── */
 
@@ -35,6 +39,21 @@ interface BandedPoint {
   sd2neg: number
   sd2pos: number
   sd3pos: number
+  patientValue?: number | null
+}
+
+export interface Measurement {
+  date: string
+  ageMonths: number
+  weightKg: number
+  heightCm: number
+}
+
+/* ── Props ────────────────────────────────────────── */
+
+interface GrowthChartProps {
+  patientId?: number
+  patientBirthDate?: string
 }
 
 /* ── Config ────────────────────────────────────────── */
@@ -67,7 +86,14 @@ function toBanded(raw: GrowthDataPoint[]): BandedPoint[] {
     sd2neg: d.sd2neg,
     sd2pos: d.sd2pos,
     sd3pos: d.sd3pos,
+    patientValue: null,
   }))
+}
+
+function computeAgeMonths(birthDate: string, measureDate: string): number {
+  const b = new Date(birthDate)
+  const m = new Date(measureDate)
+  return (m.getFullYear() - b.getFullYear()) * 12 + (m.getMonth() - b.getMonth())
 }
 
 /* ── Custom Tooltip ────────────────────────────────── */
@@ -86,28 +112,97 @@ function ChartTooltip(props: Partial<TooltipContentProps<number, string>>) {
       <p className="font-medium text-clinical-white">Mediana: {d.median}</p>
       <p className="text-clinical-white/60">-2 DE: {d.sd2neg}</p>
       <p className="text-clinical-white/60">-3 DE: {d.sd3neg}</p>
+      {d.patientValue != null && (
+        <p className="mt-1 font-bold text-omega-violet">Paciente: {d.patientValue}</p>
+      )}
     </div>
   )
 }
 
 /* ── Component ─────────────────────────────────────── */
 
-export default function GrowthChart() {
+export default function GrowthChart({ patientId, patientBirthDate }: GrowthChartProps) {
   const [chartType, setChartType] = useState<ChartType>('weight')
   const { theme } = useTheme()
   const { clinicType } = useClinic()
   const config = CHARTS[chartType]
-  const data = useMemo(() => toBanded(config.data), [config.data])
   const accent = THEME_CONFIG[clinicType ?? 'general'].accent
+
+  const storageKey = patientId && patientId > 0
+    ? `beta_growth_${patientId}`
+    : 'beta_growth'
+
+  const [measurements, setMeasurements] = usePersistentState<Measurement[]>(storageKey, [])
+
+  /* ── Measurement form state ──────────────────────── */
+  const [showForm, setShowForm] = useState(false)
+  const [formDate, setFormDate] = useState(new Date().toISOString().split('T')[0])
+  const [formAge, setFormAge] = useState('')
+  const [formWeight, setFormWeight] = useState('')
+  const [formHeight, setFormHeight] = useState('')
+
+  function addMeasurement() {
+    const weight = parseFloat(formWeight)
+    const height = parseFloat(formHeight)
+    if (isNaN(weight) || isNaN(height) || weight <= 0 || height <= 0) {
+      toast.error('Ingresa peso y talla válidos')
+      return
+    }
+
+    let ageMonths: number
+    if (patientBirthDate) {
+      ageMonths = computeAgeMonths(patientBirthDate, formDate)
+    } else if (formAge) {
+      ageMonths = parseInt(formAge, 10)
+    } else {
+      toast.error('Ingresa la edad en meses')
+      return
+    }
+
+    if (ageMonths < 0 || ageMonths > 60) {
+      toast.error('La edad debe estar entre 0 y 60 meses')
+      return
+    }
+
+    setMeasurements(prev => [...prev, { date: formDate, ageMonths, weightKg: weight, heightCm: height }])
+    setFormWeight('')
+    setFormHeight('')
+    setFormAge('')
+    setShowForm(false)
+    toast.success('Medición registrada')
+  }
+
+  function removeMeasurement(index: number) {
+    setMeasurements(prev => prev.filter((_, i) => i !== index))
+  }
+
+  /* ── Merge WHO data with patient measurements ────── */
+  const data = useMemo(() => {
+    const banded = toBanded(config.data)
+    const measureKey = chartType === 'weight' ? 'weightKg' : 'heightCm'
+
+    // Build a map of month → patient value
+    const patientMap = new Map<number, number>()
+    for (const m of measurements) {
+      patientMap.set(m.ageMonths, m[measureKey])
+    }
+
+    return banded.map(point => ({
+      ...point,
+      patientValue: patientMap.get(point.month) ?? null,
+    }))
+  }, [config.data, measurements, chartType])
 
   const tick = theme === 'dark' ? 'rgba(248,249,250,0.45)' : 'rgba(0,0,0,0.45)'
   const grid = theme === 'dark' ? 'rgba(127,255,212,0.07)' : 'rgba(0,0,0,0.06)'
   const labelFill = theme === 'dark' ? 'rgba(248,249,250,0.55)' : 'rgba(0,0,0,0.55)'
 
+  const inputCls = 'w-full rounded-lg border border-omega-violet/20 bg-white px-3 py-2 text-sm text-omega-dark outline-none focus:border-beta-mint/40 dark:border-clinical-white/10 dark:bg-omega-abyss dark:text-clinical-white'
+
   return (
     <div className="space-y-4">
-      {/* Chart type selector */}
-      <div className="flex gap-2">
+      {/* Chart type selector + Add measurement button */}
+      <div className="flex flex-wrap items-center gap-2">
         {(['weight', 'height'] as const).map(t => (
           <button
             key={t}
@@ -121,7 +216,127 @@ export default function GrowthChart() {
             {t === 'weight' ? 'Peso / Edad' : 'Talla / Edad'}
           </button>
         ))}
+        <div className="flex-1" />
+        <button
+          onClick={() => setShowForm(!showForm)}
+          className="flex items-center gap-1.5 rounded-lg bg-beta-mint/15 px-3 py-2 text-xs font-semibold text-beta-mint transition-colors hover:bg-beta-mint/25"
+        >
+          <Plus size={14} />
+          Agregar Medición
+        </button>
       </div>
+
+      {/* Measurement form */}
+      {showForm && (
+        <div className="rounded-xl border border-beta-mint/20 bg-beta-mint/5 p-4 dark:bg-beta-mint/[0.03]">
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="w-36">
+              <label className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-omega-dark/50 dark:text-clinical-white/40">
+                Fecha
+              </label>
+              <input
+                type="date"
+                value={formDate}
+                onChange={e => setFormDate(e.target.value)}
+                className={inputCls}
+              />
+            </div>
+            {!patientBirthDate && (
+              <div className="w-28">
+                <label className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-omega-dark/50 dark:text-clinical-white/40">
+                  Edad (meses)
+                </label>
+                <input
+                  type="number"
+                  min={0}
+                  max={60}
+                  value={formAge}
+                  onChange={e => setFormAge(e.target.value)}
+                  placeholder="0-60"
+                  className={inputCls}
+                />
+              </div>
+            )}
+            <div className="w-28">
+              <label className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-omega-dark/50 dark:text-clinical-white/40">
+                Peso (kg)
+              </label>
+              <input
+                type="number"
+                min={0}
+                step={0.1}
+                value={formWeight}
+                onChange={e => setFormWeight(e.target.value)}
+                placeholder="3.5"
+                className={inputCls}
+              />
+            </div>
+            <div className="w-28">
+              <label className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-omega-dark/50 dark:text-clinical-white/40">
+                Talla (cm)
+              </label>
+              <input
+                type="number"
+                min={0}
+                step={0.1}
+                value={formHeight}
+                onChange={e => setFormHeight(e.target.value)}
+                placeholder="50"
+                className={inputCls}
+              />
+            </div>
+            <button
+              onClick={addMeasurement}
+              className="rounded-lg bg-beta-mint px-4 py-2 text-sm font-bold text-omega-dark transition-transform hover:scale-105 active:scale-95"
+            >
+              Registrar
+            </button>
+            <button
+              onClick={() => setShowForm(false)}
+              className="rounded-lg px-3 py-2 text-sm text-omega-dark/50 transition-colors hover:text-omega-dark dark:text-clinical-white/40 dark:hover:text-clinical-white"
+            >
+              Cancelar
+            </button>
+          </div>
+          {patientBirthDate && (
+            <p className="mt-2 text-[10px] text-omega-dark/40 dark:text-clinical-white/30">
+              La edad se calcula automáticamente desde la fecha de nacimiento ({new Date(patientBirthDate).toLocaleDateString('es-GT')})
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* Measurements list */}
+      {measurements.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {measurements
+            .slice()
+            .sort((a, b) => a.ageMonths - b.ageMonths)
+            .map((m, i) => (
+              <div
+                key={`${m.date}-${m.ageMonths}`}
+                className="group flex items-center gap-2 rounded-lg border border-omega-violet/15 bg-omega-violet/5 px-3 py-1.5 text-xs dark:border-clinical-white/10 dark:bg-clinical-white/5"
+              >
+                <span className="font-semibold text-omega-dark dark:text-clinical-white">
+                  {m.ageMonths}m
+                </span>
+                <span className="text-omega-dark/50 dark:text-clinical-white/40">
+                  {m.weightKg}kg · {m.heightCm}cm
+                </span>
+                <span className="text-omega-dark/30 dark:text-clinical-white/20">
+                  {new Date(m.date).toLocaleDateString('es-GT', { day: '2-digit', month: 'short' })}
+                </span>
+                <button
+                  onClick={() => removeMeasurement(i)}
+                  className="rounded p-0.5 text-omega-dark/20 opacity-0 transition-all hover:text-red-400 group-hover:opacity-100 dark:text-clinical-white/15"
+                  aria-label="Eliminar medición"
+                >
+                  <Trash2 size={12} />
+                </button>
+              </div>
+            ))}
+        </div>
+      )}
 
       {/* Title */}
       <h3 className="text-base font-semibold text-omega-dark dark:text-clinical-white">
@@ -168,6 +383,29 @@ export default function GrowthChart() {
             <Line type="monotone" dataKey="median" stroke={accent} strokeWidth={2.5} dot={false} name="Mediana" />
             <Line type="monotone" dataKey="sd2pos" stroke="#FF9800" strokeWidth={1} strokeDasharray="5 3" dot={false} name="+2 DE" />
             <Line type="monotone" dataKey="sd3pos" stroke="#E53935" strokeWidth={1} strokeDasharray="5 3" dot={false} name="+3 DE" />
+
+            {/* Patient measurements overlay */}
+            {measurements.length > 0 && (
+              <Scatter
+                dataKey="patientValue"
+                fill="#7C3AED"
+                stroke="#7C3AED"
+                name="Paciente"
+                shape={(props: { cx?: number; cy?: number; payload?: BandedPoint }) => {
+                  if (props.payload?.patientValue == null) return <g />
+                  return (
+                    <circle
+                      cx={props.cx}
+                      cy={props.cy}
+                      r={5}
+                      fill="#7C3AED"
+                      stroke="#fff"
+                      strokeWidth={2}
+                    />
+                  )
+                }}
+              />
+            )}
           </ComposedChart>
         </ResponsiveContainer>
       </div>
@@ -192,6 +430,11 @@ export default function GrowthChart() {
         <span className="flex items-center gap-1.5">
           <span className="inline-block h-3 w-5 rounded-sm bg-[rgba(229,57,53,0.2)]" /> Riesgo
         </span>
+        {measurements.length > 0 && (
+          <span className="flex items-center gap-1.5">
+            <span className="inline-block h-3 w-3 rounded-full bg-omega-violet" /> Paciente
+          </span>
+        )}
       </div>
     </div>
   )

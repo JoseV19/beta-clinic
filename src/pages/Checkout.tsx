@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link, useSearchParams, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
@@ -22,10 +22,9 @@ import {
   type PricingPlan,
 } from '../data/plans'
 import { toast } from 'sonner'
-
-/* ── Constants ────────────────────────────────────────────── */
-
-/* no IVA */
+import { Elements, CardElement } from '@stripe/react-stripe-js'
+import type { Stripe } from '@stripe/stripe-js'
+import { getStripe, isStripeConfigured } from '../services/stripe'
 
 /* ── Helpers ──────────────────────────────────────────────── */
 
@@ -44,6 +43,20 @@ function formatExpiry(value: string): string {
   return digits
 }
 
+/* ── Stripe CardElement appearance ────────────────────────── */
+
+const CARD_ELEMENT_OPTIONS = {
+  style: {
+    base: {
+      color: '#F8F9FA',
+      fontFamily: 'Inter, system-ui, sans-serif',
+      fontSize: '14px',
+      '::placeholder': { color: 'rgba(255,255,255,0.3)' },
+    },
+    invalid: { color: '#EF4444' },
+  },
+}
+
 /* ── Component ────────────────────────────────────────────── */
 
 export default function Checkout() {
@@ -60,6 +73,9 @@ export default function Checkout() {
     () => getPlanById(planId) || PLANS[1],
   )
 
+  const [stripeReady, setStripeReady] = useState(false)
+  const [stripeInstance, setStripeInstance] = useState<Stripe | null>(null)
+
   const [form, setForm] = useState({
     fullName: '',
     email: '',
@@ -72,9 +88,20 @@ export default function Checkout() {
 
   const [processing, setProcessing] = useState(false)
   const [success, setSuccess] = useState(false)
+  const [cardError, setCardError] = useState<string | null>(null)
 
   const price = selectedPlan.prices[currency]
   const total = price
+
+  // Load Stripe
+  useEffect(() => {
+    if (isStripeConfigured()) {
+      getStripe().then(s => {
+        setStripeInstance(s)
+        setStripeReady(!!s)
+      })
+    }
+  }, [])
 
   function updateField(field: string, value: string) {
     setForm((prev) => ({ ...prev, [field]: value }))
@@ -83,19 +110,19 @@ export default function Checkout() {
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
 
-    if (
-      !form.fullName ||
-      !form.email ||
-      !form.cardNumber ||
-      !form.expiry ||
-      !form.cvv
-    ) {
+    if (!form.fullName || !form.email) {
       toast.error('Por favor completa todos los campos requeridos')
+      return
+    }
+
+    if (!stripeReady && (!form.cardNumber || !form.expiry || !form.cvv)) {
+      toast.error('Por favor completa todos los campos de pago')
       return
     }
 
     setProcessing(true)
 
+    // Mock payment flow (Stripe backend not yet configured)
     setTimeout(() => {
       setProcessing(false)
       setSuccess(true)
@@ -162,7 +189,7 @@ export default function Checkout() {
 
   /* ── Main layout ─────────────────────────────────────────── */
 
-  return (
+  const content = (
     <div className="relative min-h-screen bg-omega-abyss">
       {/* Gradient orbs */}
       <div
@@ -443,89 +470,97 @@ export default function Checkout() {
 
               {/* Payment section */}
               <div className="mb-8">
-                <h3 className="mb-4 text-sm font-semibold text-white/60">
+                <h3 className="mb-4 flex items-center gap-2 text-sm font-semibold text-white/60">
                   Método de pago
+                  {stripeReady && (
+                    <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-bold text-emerald-400">
+                      Stripe Seguro
+                    </span>
+                  )}
                 </h3>
-                <div className="space-y-4">
-                  <div>
-                    <label className="mb-1.5 block text-xs font-medium text-white/40">
-                      Número de tarjeta *
-                    </label>
-                    <div className="relative">
-                      <CreditCard
-                        size={16}
-                        className="absolute left-3 top-1/2 -translate-y-1/2 text-white/20"
-                      />
-                      <input
-                        type="text"
-                        value={form.cardNumber}
-                        onChange={(e) =>
-                          updateField(
-                            'cardNumber',
-                            formatCard(e.target.value),
-                          )
-                        }
-                        placeholder="4242 4242 4242 4242"
-                        maxLength={19}
-                        className="w-full rounded-lg border border-white/[0.08] bg-white/[0.05] py-3 pl-10 pr-4 text-sm text-white placeholder-white/30 outline-none transition-colors focus:border-beta-mint/50 focus:bg-white/[0.08]"
-                      />
-                    </div>
-                  </div>
 
-                  <div className="grid grid-cols-2 gap-4">
+                {stripeReady ? (
+                  /* ── Stripe CardElement ── */
+                  <div className="space-y-4">
                     <div>
                       <label className="mb-1.5 block text-xs font-medium text-white/40">
-                        Fecha de expiración *
+                        Datos de tarjeta *
                       </label>
-                      <input
-                        type="text"
-                        value={form.expiry}
-                        onChange={(e) =>
-                          updateField(
-                            'expiry',
-                            formatExpiry(e.target.value),
-                          )
-                        }
-                        placeholder="MM/YY"
-                        maxLength={5}
-                        className="w-full rounded-lg border border-white/[0.08] bg-white/[0.05] px-4 py-3 text-sm text-white placeholder-white/30 outline-none transition-colors focus:border-beta-mint/50 focus:bg-white/[0.08]"
-                      />
+                      <div className="rounded-lg border border-white/[0.08] bg-white/[0.05] px-4 py-3.5 transition-colors focus-within:border-beta-mint/50 focus-within:bg-white/[0.08]">
+                        <CardElement
+                          options={CARD_ELEMENT_OPTIONS}
+                          onChange={(e) => setCardError(e.error?.message ?? null)}
+                        />
+                      </div>
+                      {cardError && (
+                        <p className="mt-1.5 text-xs text-red-400">{cardError}</p>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  /* ── Mock card inputs (no Stripe key) ── */
+                  <div className="space-y-4">
+                    <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2">
+                      <p className="text-[11px] text-amber-400/80">
+                        Modo demo — Stripe no configurado. Los pagos son simulados.
+                      </p>
                     </div>
                     <div>
                       <label className="mb-1.5 block text-xs font-medium text-white/40">
-                        CVV *
+                        Número de tarjeta *
                       </label>
-                      <input
-                        type="text"
-                        value={form.cvv}
-                        onChange={(e) =>
-                          updateField(
-                            'cvv',
-                            e.target.value.replace(/\D/g, '').slice(0, 4),
-                          )
-                        }
-                        placeholder="123"
-                        maxLength={4}
-                        className="w-full rounded-lg border border-white/[0.08] bg-white/[0.05] px-4 py-3 text-sm text-white placeholder-white/30 outline-none transition-colors focus:border-beta-mint/50 focus:bg-white/[0.08]"
-                      />
+                      <div className="relative">
+                        <CreditCard
+                          size={16}
+                          className="absolute left-3 top-1/2 -translate-y-1/2 text-white/20"
+                        />
+                        <input
+                          type="text"
+                          value={form.cardNumber}
+                          onChange={(e) =>
+                            updateField('cardNumber', formatCard(e.target.value))
+                          }
+                          placeholder="4242 4242 4242 4242"
+                          maxLength={19}
+                          className="w-full rounded-lg border border-white/[0.08] bg-white/[0.05] py-3 pl-10 pr-4 text-sm text-white placeholder-white/30 outline-none transition-colors focus:border-beta-mint/50 focus:bg-white/[0.08]"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="mb-1.5 block text-xs font-medium text-white/40">
+                          Expiración *
+                        </label>
+                        <input
+                          type="text"
+                          value={form.expiry}
+                          onChange={(e) =>
+                            updateField('expiry', formatExpiry(e.target.value))
+                          }
+                          placeholder="MM/YY"
+                          maxLength={5}
+                          className="w-full rounded-lg border border-white/[0.08] bg-white/[0.05] px-4 py-3 text-sm text-white placeholder-white/30 outline-none transition-colors focus:border-beta-mint/50 focus:bg-white/[0.08]"
+                        />
+                      </div>
+                      <div>
+                        <label className="mb-1.5 block text-xs font-medium text-white/40">
+                          CVV *
+                        </label>
+                        <input
+                          type="text"
+                          value={form.cvv}
+                          onChange={(e) =>
+                            updateField('cvv', e.target.value.replace(/\D/g, '').slice(0, 4))
+                          }
+                          placeholder="123"
+                          maxLength={4}
+                          className="w-full rounded-lg border border-white/[0.08] bg-white/[0.05] px-4 py-3 text-sm text-white placeholder-white/30 outline-none transition-colors focus:border-beta-mint/50 focus:bg-white/[0.08]"
+                        />
+                      </div>
                     </div>
                   </div>
-
-                  <div>
-                    <label className="mb-1.5 block text-xs font-medium text-white/40">
-                      Nombre en la tarjeta
-                    </label>
-                    <input
-                      type="text"
-                      value={form.cardName}
-                      onChange={(e) =>
-                        updateField('cardName', e.target.value)
-                      }
-                      placeholder="JUAN PEREZ"
-                      className="w-full rounded-lg border border-white/[0.08] bg-white/[0.05] px-4 py-3 text-sm uppercase text-white placeholder-white/30 outline-none transition-colors focus:border-beta-mint/50 focus:bg-white/[0.08]"
-                    />
-                  </div>
-                </div>
+                )}
               </div>
 
               {/* Submit button */}
@@ -568,4 +603,15 @@ export default function Checkout() {
       </motion.div>
     </div>
   )
+
+  // Wrap in Stripe Elements if available
+  if (stripeReady && stripeInstance) {
+    return (
+      <Elements stripe={stripeInstance} options={{ appearance: { theme: 'night' } }}>
+        {content}
+      </Elements>
+    )
+  }
+
+  return content
 }

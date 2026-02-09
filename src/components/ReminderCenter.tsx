@@ -22,6 +22,12 @@ import {
 } from 'lucide-react'
 import { useData } from '../context/DataContext'
 import { useClinic, type ClinicType } from '../context/ClinicContext'
+import {
+  openWhatsApp as openWa,
+  formatGuatemalaPhone,
+  displayPhone,
+  trackMessage,
+} from '../services/whatsapp'
 
 /* ── Types ─────────────────────────────────────────────── */
 
@@ -302,7 +308,7 @@ function PreviewModal({
             </p>
           </div>
           <p className="mt-2 text-right text-[10px] text-clinical-white/25">
-            WhatsApp · +{row.phone}
+            WhatsApp · {displayPhone(row.phone)}
           </p>
         </div>
 
@@ -396,9 +402,7 @@ export default function ReminderCenter() {
   const phoneMap = useMemo(() => {
     const m = new Map<string, string>()
     patients.forEach((p) => {
-      const clean = p.telefono.replace(/\D/g, '')
-      const phone = clean.startsWith('502') ? clean : `502${clean}`
-      m.set(p.nombre, phone)
+      m.set(p.nombre, formatGuatemalaPhone(p.telefono))
     })
     return m
   }, [patients])
@@ -451,8 +455,8 @@ export default function ReminderCenter() {
 
   /* ── WhatsApp open ──────────────────────────────────── */
 
-  const openWhatsApp = useCallback((phone: string, message: string) => {
-    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, '_blank')
+  const handleOpenWhatsApp = useCallback((phone: string, message: string) => {
+    openWa(phone, message)
   }, [])
 
   /* ── Send individual ────────────────────────────────── */
@@ -468,7 +472,18 @@ export default function ReminderCenter() {
       )
 
       // Open WhatsApp
-      openWhatsApp(row.phone, row.message)
+      handleOpenWhatsApp(row.phone, row.message)
+
+      // Track message in localStorage
+      trackMessage({
+        phone: row.phone,
+        pacienteId: 0,
+        message: row.message,
+        templateId: 'reminder-24h',
+        status: 'enviado',
+        sentAt: new Date().toISOString(),
+        channel: 'wa_link',
+      })
 
       // Mark as sent after 1.5s
       setTimeout(() => {
@@ -480,7 +495,7 @@ export default function ReminderCenter() {
         toast.success(`Recordatorio enviado a ${row.patient}`)
       }, 1500)
     },
-    [reminders, openWhatsApp],
+    [reminders, handleOpenWhatsApp],
   )
 
   /* ── Send from preview ──────────────────────────────── */

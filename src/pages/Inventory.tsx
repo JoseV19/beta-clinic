@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
 import {
   Package,
   Plus,
@@ -63,10 +64,19 @@ function AddProductModal({
     'w-full rounded-lg border border-omega-violet/20 bg-clinical-white px-3 py-2 text-sm text-omega-dark outline-none focus:border-omega-violet/40 focus:ring-2 focus:ring-omega-violet/10 dark:border-clinical-white/10 dark:bg-omega-abyss dark:text-clinical-white dark:focus:border-beta-mint/30 dark:focus:ring-beta-mint/10'
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+    >
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
 
-      <form
+      <motion.form
+        initial={{ opacity: 0, scale: 0.92 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.92 }}
+        transition={{ duration: 0.15 }}
         onSubmit={handleSubmit}
         className="relative w-full max-w-lg rounded-2xl border border-omega-violet/20 bg-white p-6 shadow-xl dark:border-clinical-white/10 dark:bg-omega-surface"
       >
@@ -78,6 +88,7 @@ function AddProductModal({
             type="button"
             onClick={onClose}
             className="rounded-lg p-1 text-omega-dark/40 transition-colors hover:bg-omega-violet/5 dark:text-clinical-white/40 dark:hover:bg-clinical-white/5"
+            aria-label="Cerrar"
           >
             <X size={20} />
           </button>
@@ -192,8 +203,8 @@ function AddProductModal({
             Agregar
           </button>
         </div>
-      </form>
-    </div>
+      </motion.form>
+    </motion.div>
   )
 }
 
@@ -434,7 +445,9 @@ export default function Inventory() {
       </div>
 
       {/* Modal */}
-      {modalOpen && <AddProductModal onClose={() => setModalOpen(false)} onSave={handleAdd} />}
+      <AnimatePresence>
+        {modalOpen && <AddProductModal onClose={() => setModalOpen(false)} onSave={handleAdd} />}
+      </AnimatePresence>
     </div>
   )
 }

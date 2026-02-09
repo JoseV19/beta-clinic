@@ -1,0 +1,24 @@
+User-agent: *
+Allow: /
+Disallow: /dashboard
+Disallow: /pacientes
+Disallow: /consultas
+Disallow: /configuracion
+Disallow: /facturacion
+Disallow: /onboarding
+Disallow: /mi-salud
+Disallow: /portal
+Disallow: /telemedicina
+Disallow: /recordatorios
+Disallow: /laboratorios
+Disallow: /inventario
+Disallow: /tareas
+Disallow: /directorio
+Disallow: /reportes-rips
+Disallow: /recetas
+Disallow: /odontograma
+Disallow: /tratamientos
+Disallow: /presupuestos
+Disallow: /welcome
+
+Sitemap: https://beta-clinic.vercel.app/sitemap.xml

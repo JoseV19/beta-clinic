@@ -1,5 +1,5 @@
-import PatientPortal from '../components/PatientPortal'
+import PatientPortal, { type PatientPortalProps } from '../components/PatientPortal'
 
-export default function PatientLayout() {
-  return <PatientPortal />
+export default function PatientLayout(props: PatientPortalProps) {
+  return <PatientPortal {...props} />
 }

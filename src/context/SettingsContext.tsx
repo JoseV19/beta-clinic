@@ -98,7 +98,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   }, [appearance.reducedAnimations])
 
   function clearAllData() {
-    const keys = ['beta_patients', 'beta_appointments', 'beta_finance', 'beta_clinic_profile', 'beta_appearance', 'beta_doctor_profile', 'beta_print_settings']
+    const keys = ['beta_patients', 'beta_appointments', 'beta_consultations', 'beta_invoices', 'beta_notifications', 'beta_finance', 'beta_clinic_profile', 'beta_appearance', 'beta_doctor_profile', 'beta_print_settings']
     keys.forEach((k) => localStorage.removeItem(k))
     window.location.reload()
   }

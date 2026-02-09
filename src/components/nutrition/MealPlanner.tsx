@@ -14,6 +14,7 @@ import { useSettings } from '../../context/SettingsContext'
 import { useClinic } from '../../context/ClinicContext'
 import { THEME_CONFIG } from '../../data/themeConfig'
 import { generateDietPlan } from '../../services/aiService'
+import { usePersistentState } from '../../hooks/usePersistentState'
 
 /* ── Constants ─────────────────────────────────────────── */
 
@@ -38,6 +39,7 @@ const FOOD_BANK = [
 /* ── Props ─────────────────────────────────────────────── */
 
 interface Props {
+  patientId?: number
   patientName?: string
   patientWeight?: number
   patientBmi?: number
@@ -45,8 +47,9 @@ interface Props {
 
 /* ── Component ─────────────────────────────────────────── */
 
-export default function MealPlanner({ patientName, patientWeight, patientBmi }: Props) {
-  const [grid, setGrid] = useState<Grid>(emptyGrid)
+export default function MealPlanner({ patientId, patientName, patientWeight, patientBmi }: Props) {
+  const storageKey = patientId ? `beta_diet_${patientId}` : 'beta_diet'
+  const [grid, setGrid] = usePersistentState<Grid>(storageKey, emptyGrid())
   const [focusedCell, setFocusedCell] = useState<[number, number] | null>(null)
   const textareaRefs = useRef<(HTMLTextAreaElement | null)[][]>(
     MEALS.map(() => DAYS.map(() => null)),
@@ -182,7 +185,7 @@ export default function MealPlanner({ patientName, patientWeight, patientBmi }: 
     doc.setFont('helvetica', 'bold')
     doc.text('Fecha:', w - 55, y)
     doc.setFont('helvetica', 'normal')
-    doc.text(new Date().toLocaleDateString('es-CO'), w - 38, y)
+    doc.text(new Date().toLocaleDateString('es-GT'), w - 38, y)
 
     y += 10
 

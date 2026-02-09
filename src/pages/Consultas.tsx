@@ -12,107 +12,72 @@ import {
   Save,
   Activity,
 } from 'lucide-react'
-
-/* ── Types ─────────────────────────────────────────────── */
-
-type EstadoConsulta = 'completada' | 'en_curso' | 'pendiente' | 'cancelada'
-type TipoConsulta = 'general' | 'especialista' | 'urgencia' | 'control'
-type Tab = 'todas' | 'pendientes' | 'completadas' | 'canceladas'
-
-interface SoapNotes {
-  subjetivo: string
-  objetivo: string
-  analisis: string
-  plan: string
-}
-
-interface Consulta {
-  id: number
-  fecha: string
-  hora: string
-  paciente: string
-  motivo: string
-  tipo: TipoConsulta
-  doctor: string
-  estado: EstadoConsulta
-  soap?: SoapNotes
-}
+import { toast } from 'sonner'
+import { useData } from '../context/DataContext'
+import { useSettings } from '../context/SettingsContext'
+import CIE10Autocomplete from '../components/ui/CIE10Autocomplete'
+import type { Consultation, ConsultationType, ConsultationStatus, SoapNotes, DiagnosticoCIE10 } from '../types/phase2'
 
 /* ── Constants ─────────────────────────────────────────── */
 
-const pacientes = [
-  'María García', 'Carlos López', 'Ana Torres',
-  'Luis Ramírez', 'Sofía Mendoza', 'Jorge Castillo',
-  'Valentina Ruiz', 'Andrés Morales', 'Camila Herrera', 'Diego Vargas',
-]
+type Tab = 'todas' | 'pendientes' | 'completadas' | 'canceladas'
 
-const doctores = [
-  'Dr. Alejandro Rodríguez',
-  'Dra. Laura Martínez',
-  'Dr. Felipe Herrera',
-]
-
-const estadoConfig: Record<EstadoConsulta, { label: string; className: string }> = {
+const estadoConfig: Record<ConsultationStatus, { label: string; className: string }> = {
   completada: { label: 'Completada', className: 'bg-beta-mint/15 text-emerald-700 dark:text-beta-mint' },
   en_curso:   { label: 'En Curso',   className: 'bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-400' },
   pendiente:  { label: 'Pendiente',  className: 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400' },
   cancelada:  { label: 'Cancelada',  className: 'bg-alert-red/10 text-alert-red' },
 }
 
-const tipoConfig: Record<TipoConsulta, { label: string; className: string }> = {
+const tipoConfig: Record<ConsultationType, { label: string; className: string }> = {
   general:      { label: 'General',      className: 'bg-omega-violet/10 text-omega-violet dark:bg-omega-violet/25 dark:text-beta-mint' },
   especialista: { label: 'Especialista', className: 'bg-purple-100 text-purple-700 dark:bg-purple-500/15 dark:text-purple-400' },
   urgencia:     { label: 'Urgencia',     className: 'bg-alert-red/10 text-alert-red' },
   control:      { label: 'Control',      className: 'bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400' },
+  telemedicina: { label: 'Telemedicina', className: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-500/15 dark:text-cyan-400' },
 }
 
 const inputClass =
   'w-full rounded-lg border border-omega-violet/20 bg-clinical-white px-3 py-2 text-sm text-omega-dark outline-none focus:border-omega-violet/40 focus:ring-2 focus:ring-omega-violet/10 dark:border-clinical-white/10 dark:bg-omega-abyss dark:text-clinical-white dark:focus:border-beta-mint/30 dark:focus:ring-beta-mint/10'
-
-/* ── Mock data ─────────────────────────────────────────── */
-
-const initialConsultas: Consulta[] = [
-  { id: 1,  fecha: '2026-02-05', hora: '09:00', paciente: 'María García',     motivo: 'Control de hipertensión',        tipo: 'control',      doctor: 'Dr. Alejandro Rodríguez', estado: 'completada', soap: { subjetivo: 'Paciente refiere mareos leves al levantarse por las mañanas. No refiere cefalea ni dolor torácico.', objetivo: 'PA: 140/90 mmHg, FC: 78 bpm, Peso: 68 kg. Examen cardiovascular sin soplos.', analisis: 'Hipertensión arterial esencial grado I. Control parcial con medicación actual.', plan: 'Ajustar dosis de Losartán a 100 mg/día. Control en 4 semanas con PA domiciliaria.' } },
-  { id: 2,  fecha: '2026-02-05', hora: '10:30', paciente: 'Carlos López',     motivo: 'Dolor abdominal agudo',          tipo: 'urgencia',     doctor: 'Dra. Laura Martínez',     estado: 'en_curso' },
-  { id: 3,  fecha: '2026-02-05', hora: '11:00', paciente: 'Ana Torres',       motivo: 'Chequeo anual',                  tipo: 'general',      doctor: 'Dr. Alejandro Rodríguez', estado: 'en_curso' },
-  { id: 4,  fecha: '2026-02-05', hora: '14:00', paciente: 'Sofía Mendoza',    motivo: 'Revisión de exámenes',           tipo: 'control',      doctor: 'Dr. Felipe Herrera',      estado: 'pendiente' },
-  { id: 5,  fecha: '2026-02-05', hora: '15:30', paciente: 'Jorge Castillo',   motivo: 'Dolor de cabeza persistente',    tipo: 'general',      doctor: 'Dra. Laura Martínez',     estado: 'pendiente' },
-  { id: 6,  fecha: '2026-02-06', hora: '09:00', paciente: 'Diego Vargas',     motivo: 'Consulta prenatal',              tipo: 'especialista', doctor: 'Dr. Felipe Herrera',      estado: 'pendiente' },
-  { id: 7,  fecha: '2026-02-05', hora: '08:00', paciente: 'Valentina Ruiz',   motivo: 'Seguimiento post-operatorio',    tipo: 'control',      doctor: 'Dr. Alejandro Rodríguez', estado: 'en_curso' },
-  { id: 8,  fecha: '2026-02-04', hora: '09:30', paciente: 'Luis Ramírez',     motivo: 'Dolor lumbar crónico',           tipo: 'especialista', doctor: 'Dra. Laura Martínez',     estado: 'completada', soap: { subjetivo: 'Dolor lumbar de 3 meses de evolución, sin irradiación. Empeora al estar sentado mucho tiempo.', objetivo: 'Dolor a la palpación L4-L5. Lasègue negativo bilateral. Fuerza muscular conservada.', analisis: 'Lumbalgia mecánica crónica sin signos de radiculopatía.', plan: 'Fisioterapia 10 sesiones. Naproxeno 500 mg c/12h por 7 días. Control en 3 semanas.' } },
-  { id: 9,  fecha: '2026-02-03', hora: '10:00', paciente: 'Camila Herrera',   motivo: 'Erupción cutánea',              tipo: 'general',      doctor: 'Dr. Felipe Herrera',      estado: 'completada', soap: { subjetivo: 'Erupción en antebrazo derecho desde hace 5 días, pruriginosa. No refiere fiebre.', objetivo: 'Lesiones eritematosas papulares en cara anterior del antebrazo derecho. No vesículas.', analisis: 'Dermatitis de contacto probable. Descartar reacción alérgica.', plan: 'Betametasona crema 0.05% BID por 10 días. Loratadina 10 mg/día por 7 días.' } },
-  { id: 10, fecha: '2026-02-02', hora: '11:30', paciente: 'Andrés Morales',   motivo: 'Revisión dermatológica',         tipo: 'especialista', doctor: 'Dra. Laura Martínez',     estado: 'completada' },
-  { id: 11, fecha: '2026-02-01', hora: '08:30', paciente: 'María García',     motivo: 'Evaluación cardiovascular',      tipo: 'especialista', doctor: 'Dr. Alejandro Rodríguez', estado: 'completada', soap: { subjetivo: 'Paciente asintomática cardiovascular. Acude por control de rutina.', objetivo: 'PA: 130/85 mmHg, FC: 72 bpm. ECG: ritmo sinusal, sin alteraciones.', analisis: 'Hipertensión controlada con tratamiento actual.', plan: 'Continuar Losartán 50 mg/día. Ecocardiograma de control en 6 meses.' } },
-  { id: 12, fecha: '2026-01-30', hora: '14:00', paciente: 'Jorge Castillo',   motivo: 'Certificado médico laboral',     tipo: 'general',      doctor: 'Dr. Felipe Herrera',      estado: 'completada' },
-  { id: 13, fecha: '2026-01-28', hora: '10:00', paciente: 'Ana Torres',       motivo: 'Gastritis recurrente',           tipo: 'control',      doctor: 'Dra. Laura Martínez',     estado: 'completada', soap: { subjetivo: 'Dolor epigástrico recurrente, mejora parcial con omeprazol. Dieta mejorada.', objetivo: 'Abdomen blando, dolor leve a palpación en epigastrio. Sin signos peritoneales.', analisis: 'Gastritis crónica con respuesta parcial a IBP.', plan: 'Omeprazol 40 mg AM por 4 semanas. Dieta blanda. Endoscopia si no mejora.' } },
-  { id: 14, fecha: '2026-01-25', hora: '09:00', paciente: 'Sofía Mendoza',    motivo: 'Control diabetes gestacional',   tipo: 'control',      doctor: 'Dr. Alejandro Rodríguez', estado: 'cancelada' },
-  { id: 15, fecha: '2026-01-20', hora: '16:00', paciente: 'Carlos López',     motivo: 'Consulta por vértigo',           tipo: 'general',      doctor: 'Dra. Laura Martínez',     estado: 'cancelada' },
-]
 
 /* ── Nueva Consulta Modal ──────────────────────────────── */
 
 function NuevaConsultaModal({
   onClose,
   onSave,
+  patients,
+  defaultDoctor,
 }: {
   onClose: () => void
-  onSave: (c: Omit<Consulta, 'id'>) => void
+  onSave: (c: Omit<Consultation, 'id' | 'createdAt' | 'updatedAt'>) => void
+  patients: { id: number; nombre: string }[]
+  defaultDoctor: string
 }) {
   const today = new Date().toISOString().split('T')[0]
-  const [paciente, setPaciente] = useState(pacientes[0])
-  const [doctor, setDoctor] = useState(doctores[0])
+  const [patientId, setPatientId] = useState(patients[0]?.id ?? 0)
+  const [doctorName, setDoctorName] = useState(defaultDoctor)
   const [fecha, setFecha] = useState(today)
   const [hora, setHora] = useState('')
-  const [tipo, setTipo] = useState<TipoConsulta>('general')
+  const [tipo, setTipo] = useState<ConsultationType>('general')
   const [motivo, setMotivo] = useState('')
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!motivo.trim() || !hora) return
-    onSave({ fecha, hora, paciente, motivo: motivo.trim(), tipo, doctor, estado: 'pendiente' })
+    const patientName = patients.find(p => p.id === patientId)?.nombre ?? 'Desconocido'
+    onSave({
+      patientId,
+      patientName,
+      fecha,
+      hora,
+      motivo: motivo.trim(),
+      tipo,
+      doctor: doctorName,
+      estado: 'pendiente',
+    })
   }
 
-  const tipoOptions: { key: TipoConsulta; label: string }[] = [
+  const tipoOptions: { key: ConsultationType; label: string }[] = [
     { key: 'general', label: 'General' },
     { key: 'especialista', label: 'Especialista' },
     { key: 'urgencia', label: 'Urgencia' },
@@ -129,11 +94,7 @@ function NuevaConsultaModal({
       >
         <div className="mb-5 flex items-center justify-between">
           <h2 className="text-lg font-bold text-omega-dark dark:text-clinical-white">Nueva Consulta</h2>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-lg p-1 text-omega-dark/40 transition-colors hover:bg-omega-violet/5 dark:text-clinical-white/40 dark:hover:bg-clinical-white/5"
-          >
+          <button type="button" onClick={onClose} className="rounded-lg p-1 text-omega-dark/40 transition-colors hover:bg-omega-violet/5 dark:text-clinical-white/40 dark:hover:bg-clinical-white/5">
             <X size={20} />
           </button>
         </div>
@@ -141,18 +102,17 @@ function NuevaConsultaModal({
         <div className="space-y-4">
           {/* Paciente */}
           <div>
-            <label className="mb-1 block text-xs font-medium text-omega-dark/60 dark:text-clinical-white/40">Paciente</label>
-            <select value={paciente} onChange={(e) => setPaciente(e.target.value)} className={inputClass}>
-              {pacientes.map((p) => <option key={p} value={p}>{p}</option>)}
+            <label className="mb-1 block text-xs font-medium text-omega-dark/60 dark:text-clinical-white/40">Paciente *</label>
+            <select value={patientId} onChange={(e) => setPatientId(Number(e.target.value))} className={inputClass}>
+              {patients.length === 0 && <option value={0}>Sin pacientes</option>}
+              {patients.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}
             </select>
           </div>
 
           {/* Doctor */}
           <div>
             <label className="mb-1 block text-xs font-medium text-omega-dark/60 dark:text-clinical-white/40">Doctor</label>
-            <select value={doctor} onChange={(e) => setDoctor(e.target.value)} className={inputClass}>
-              {doctores.map((d) => <option key={d} value={d}>{d}</option>)}
-            </select>
+            <input value={doctorName} onChange={(e) => setDoctorName(e.target.value)} className={inputClass} placeholder="Dr. ..." />
           </div>
 
           {/* Fecha + Hora */}
@@ -203,17 +163,10 @@ function NuevaConsultaModal({
         </div>
 
         <div className="mt-6 flex justify-end gap-3">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-lg border border-omega-violet/20 px-4 py-2 text-sm font-medium text-omega-dark/60 transition-colors hover:bg-omega-violet/5 dark:border-clinical-white/10 dark:text-clinical-white/50 dark:hover:bg-clinical-white/5"
-          >
+          <button type="button" onClick={onClose} className="rounded-lg border border-omega-violet/20 px-4 py-2 text-sm font-medium text-omega-dark/60 transition-colors hover:bg-omega-violet/5 dark:border-clinical-white/10 dark:text-clinical-white/50 dark:hover:bg-clinical-white/5">
             Cancelar
           </button>
-          <button
-            type="submit"
-            className="flex items-center gap-2 rounded-lg bg-beta-mint px-5 py-2 text-sm font-bold text-omega-dark transition-colors hover:bg-beta-mint/80"
-          >
+          <button type="submit" className="flex items-center gap-2 rounded-lg bg-beta-mint px-5 py-2 text-sm font-bold text-omega-dark transition-colors hover:bg-beta-mint/80">
             <Plus size={16} />
             Agendar Consulta
           </button>
@@ -228,14 +181,17 @@ function NuevaConsultaModal({
 function DetalleConsultaModal({
   consulta,
   onClose,
-  onUpdateSoap,
+  onUpdate,
 }: {
-  consulta: Consulta
+  consulta: Consultation
   onClose: () => void
-  onUpdateSoap: (id: number, soap: SoapNotes) => void
+  onUpdate: (updated: Consultation) => void
 }) {
   const [soap, setSoap] = useState<SoapNotes>(
     consulta.soap ?? { subjetivo: '', objetivo: '', analisis: '', plan: '' },
+  )
+  const [cie10Codes, setCie10Codes] = useState<DiagnosticoCIE10[]>(
+    consulta.diagnosticoCIE10 ?? [],
   )
   const [saved, setSaved] = useState(false)
 
@@ -245,8 +201,9 @@ function DetalleConsultaModal({
   }
 
   function handleSave() {
-    onUpdateSoap(consulta.id, soap)
+    onUpdate({ ...consulta, soap, diagnosticoCIE10: cie10Codes })
     setSaved(true)
+    toast.success('Nota guardada')
   }
 
   const soapFields: { key: keyof SoapNotes; label: string; placeholder: string }[] = [
@@ -259,7 +216,7 @@ function DetalleConsultaModal({
   const infoItems = [
     ['Fecha', consulta.fecha],
     ['Hora', consulta.hora],
-    ['Paciente', consulta.paciente],
+    ['Paciente', consulta.patientName],
     ['Motivo', consulta.motivo],
     ['Doctor', consulta.doctor],
   ]
@@ -273,17 +230,14 @@ function DetalleConsultaModal({
         <div className="mb-5 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <span className="flex h-9 w-9 items-center justify-center rounded-full bg-omega-violet/10 text-xs font-bold text-omega-violet dark:bg-omega-violet/25 dark:text-beta-mint">
-              {consulta.paciente.split(' ').map((n) => n[0]).join('')}
+              {consulta.patientName.split(' ').map((n) => n[0]).join('')}
             </span>
             <div>
-              <h2 className="text-lg font-bold text-omega-dark dark:text-clinical-white">{consulta.paciente}</h2>
+              <h2 className="text-lg font-bold text-omega-dark dark:text-clinical-white">{consulta.patientName}</h2>
               <p className="text-xs text-omega-dark/50 dark:text-clinical-white/40">{consulta.motivo}</p>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="rounded-lg p-1 text-omega-dark/40 transition-colors hover:bg-omega-violet/5 dark:text-clinical-white/40 dark:hover:bg-clinical-white/5"
-          >
+          <button onClick={onClose} className="rounded-lg p-1 text-omega-dark/40 transition-colors hover:bg-omega-violet/5 dark:text-clinical-white/40 dark:hover:bg-clinical-white/5">
             <X size={20} />
           </button>
         </div>
@@ -296,7 +250,6 @@ function DetalleConsultaModal({
               <dd className="mt-1 text-sm font-semibold text-omega-dark dark:text-clinical-white">{value}</dd>
             </div>
           ))}
-          {/* Tipo badge */}
           <div className="rounded-lg border border-omega-violet/10 bg-clinical-white px-4 py-3 dark:border-clinical-white/10 dark:bg-omega-abyss">
             <dt className="text-[11px] font-medium uppercase tracking-wider text-omega-dark/40 dark:text-clinical-white/30">Tipo</dt>
             <dd className="mt-1">
@@ -305,7 +258,6 @@ function DetalleConsultaModal({
               </span>
             </dd>
           </div>
-          {/* Estado badge */}
           <div className="rounded-lg border border-omega-violet/10 bg-clinical-white px-4 py-3 dark:border-clinical-white/10 dark:bg-omega-abyss">
             <dt className="text-[11px] font-medium uppercase tracking-wider text-omega-dark/40 dark:text-clinical-white/30">Estado</dt>
             <dd className="mt-1">
@@ -314,6 +266,19 @@ function DetalleConsultaModal({
               </span>
             </dd>
           </div>
+          {consulta.diagnosticoCIE10 && consulta.diagnosticoCIE10.length > 0 && (
+            <div className="rounded-lg border border-omega-violet/10 bg-clinical-white px-4 py-3 sm:col-span-2 dark:border-clinical-white/10 dark:bg-omega-abyss">
+              <dt className="text-[11px] font-medium uppercase tracking-wider text-omega-dark/40 dark:text-clinical-white/30">Diagnóstico CIE-10</dt>
+              <dd className="mt-1.5 flex flex-wrap gap-1.5">
+                {consulta.diagnosticoCIE10.map(dx => (
+                  <span key={dx.codigo} className="inline-flex items-center gap-1 rounded-lg bg-omega-violet/10 px-2.5 py-1 text-xs font-medium text-omega-violet dark:bg-omega-violet/25 dark:text-beta-mint">
+                    <span className="font-bold">{dx.codigo}</span>
+                    <span className="opacity-70">{dx.descripcion}</span>
+                  </span>
+                ))}
+              </dd>
+            </div>
+          )}
         </dl>
 
         {/* Divider */}
@@ -336,6 +301,21 @@ function DetalleConsultaModal({
                 placeholder={placeholder}
                 className="w-full resize-none rounded-lg border border-omega-violet/20 bg-clinical-white px-3 py-2 text-sm text-omega-dark outline-none transition-shadow placeholder:text-omega-dark/30 focus:border-omega-violet/40 focus:ring-2 focus:ring-omega-violet/10 dark:border-clinical-white/10 dark:bg-omega-abyss dark:text-clinical-white dark:placeholder:text-clinical-white/25 dark:focus:border-beta-mint/30 dark:focus:ring-beta-mint/10"
               />
+              {key === 'analisis' && (
+                <div className="mt-3">
+                  <label className="mb-1.5 block text-xs font-medium text-omega-dark/60 dark:text-clinical-white/40">
+                    Diagnóstico CIE-10
+                  </label>
+                  <CIE10Autocomplete
+                    selectedCodes={cie10Codes}
+                    onCodesChange={(codes) => {
+                      setCie10Codes(codes)
+                      setSaved(false)
+                    }}
+                    maxCodes={5}
+                  />
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -360,48 +340,48 @@ function DetalleConsultaModal({
 /* ── Main component ────────────────────────────────────── */
 
 export default function Consultas() {
-  const [consultas, setConsultas] = useState<Consulta[]>(initialConsultas)
+  const { consultations, addConsultation, updateConsultation, patients } = useData()
+  const { doctor } = useSettings()
   const [tab, setTab] = useState<Tab>('todas')
   const [search, setSearch] = useState('')
   const [modalOpen, setModalOpen] = useState(false)
-  const [selectedConsulta, setSelectedConsulta] = useState<Consulta | null>(null)
+  const [selectedConsulta, setSelectedConsulta] = useState<Consultation | null>(null)
 
   /* ── Computed ──────────────────────────────────────────── */
 
   const summary = useMemo(() => {
-    const total = consultas.length
-    const pendientes = consultas.filter((c) => c.estado === 'pendiente' || c.estado === 'en_curso').length
+    const total = consultations.length
+    const pendientes = consultations.filter((c) => c.estado === 'pendiente' || c.estado === 'en_curso').length
     const oneWeekAgo = new Date()
     oneWeekAgo.setDate(oneWeekAgo.getDate() - 7)
     const weekStr = oneWeekAgo.toISOString().split('T')[0]
-    const completadasSemana = consultas.filter((c) => c.estado === 'completada' && c.fecha >= weekStr).length
+    const completadasSemana = consultations.filter((c) => c.estado === 'completada' && c.fecha >= weekStr).length
     return { total, pendientes, completadasSemana }
-  }, [consultas])
+  }, [consultations])
 
   const filtered = useMemo(() => {
-    let list = consultas
+    let list = consultations
     if (tab === 'pendientes') list = list.filter((c) => c.estado === 'pendiente' || c.estado === 'en_curso')
     if (tab === 'completadas') list = list.filter((c) => c.estado === 'completada')
     if (tab === 'canceladas') list = list.filter((c) => c.estado === 'cancelada')
     if (search.trim()) {
       const q = search.toLowerCase()
-      list = list.filter((c) => c.paciente.toLowerCase().includes(q))
+      list = list.filter((c) => c.patientName.toLowerCase().includes(q))
     }
     return list
-  }, [consultas, tab, search])
+  }, [consultations, tab, search])
 
   /* ── Handlers ─────────────────────────────────────────── */
 
-  function handleSaveNew(c: Omit<Consulta, 'id'>) {
-    setConsultas((prev) => [{ ...c, id: Date.now() }, ...prev])
+  function handleSaveNew(c: Omit<Consultation, 'id' | 'createdAt' | 'updatedAt'>) {
+    addConsultation(c)
     setModalOpen(false)
+    toast.success('Consulta agendada')
   }
 
-  function handleUpdateSoap(id: number, soap: SoapNotes) {
-    setConsultas((prev) => prev.map((c) => (c.id === id ? { ...c, soap } : c)))
-    if (selectedConsulta?.id === id) {
-      setSelectedConsulta((prev) => prev ? { ...prev, soap } : prev)
-    }
+  function handleUpdate(updated: Consultation) {
+    updateConsultation(updated)
+    setSelectedConsulta(updated)
   }
 
   /* ── Summary cards config ─────────────────────────────── */
@@ -411,8 +391,6 @@ export default function Consultas() {
     { label: 'Pendientes',            value: summary.pendientes,        icon: Clock,         color: 'text-amber-500 dark:text-amber-400' },
     { label: 'Completadas (semana)',   value: summary.completadasSemana, icon: CheckCircle2,  color: 'text-emerald-500 dark:text-beta-mint' },
   ]
-
-  /* ── Tab config ───────────────────────────────────────── */
 
   const tabItems: { key: Tab; label: string; icon: typeof ClipboardList }[] = [
     { key: 'todas',       label: 'Todas',       icon: ClipboardList },
@@ -443,16 +421,11 @@ export default function Consultas() {
       {/* Summary cards */}
       <div className="grid gap-5 sm:grid-cols-3">
         {summaryCards.map(({ label, value, icon: Icon, color }) => (
-          <div
-            key={label}
-            className="relative overflow-hidden rounded-xl border border-omega-violet/20 bg-white p-5 dark:border-clinical-white/10 dark:bg-omega-surface"
-          >
+          <div key={label} className="relative overflow-hidden rounded-xl border border-omega-violet/20 bg-white p-5 dark:border-clinical-white/10 dark:bg-omega-surface">
             <div className="absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-omega-violet via-beta-mint to-omega-violet" />
             <div className="flex items-start justify-between">
               <div>
-                <p className="text-xs font-medium uppercase tracking-wider text-omega-dark/50 dark:text-clinical-white/40">
-                  {label}
-                </p>
+                <p className="text-xs font-medium uppercase tracking-wider text-omega-dark/50 dark:text-clinical-white/40">{label}</p>
                 <p className={`mt-2 text-2xl font-bold ${color}`}>{value}</p>
               </div>
               <div className="rounded-lg bg-omega-violet/10 p-2.5 dark:bg-omega-violet/25">
@@ -477,7 +450,6 @@ export default function Consultas() {
 
       {/* Tabs + Table */}
       <div className="overflow-hidden rounded-xl border border-omega-violet/20 bg-white dark:border-clinical-white/10 dark:bg-omega-surface">
-        {/* Tab bar */}
         <div className="flex gap-1 border-b border-omega-violet/10 px-4 pt-3 dark:border-clinical-white/5">
           {tabItems.map(({ key, label, icon: Icon }) => (
             <button
@@ -495,7 +467,6 @@ export default function Consultas() {
           ))}
         </div>
 
-        {/* Table */}
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
             <thead>
@@ -519,7 +490,7 @@ export default function Consultas() {
                 >
                   <td className="px-5 py-3 text-omega-dark/70 dark:text-clinical-white/60">{c.fecha}</td>
                   <td className="px-5 py-3 text-omega-dark/70 dark:text-clinical-white/60">{c.hora}</td>
-                  <td className="px-5 py-3 font-medium text-omega-dark dark:text-clinical-white">{c.paciente}</td>
+                  <td className="px-5 py-3 font-medium text-omega-dark dark:text-clinical-white">{c.patientName}</td>
                   <td className="hidden px-5 py-3 text-omega-dark/70 md:table-cell dark:text-clinical-white/60">{c.motivo}</td>
                   <td className="hidden px-5 py-3 sm:table-cell">
                     <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-medium ${tipoConfig[c.tipo].className}`}>
@@ -559,12 +530,19 @@ export default function Consultas() {
       </div>
 
       {/* Modals */}
-      {modalOpen && <NuevaConsultaModal onClose={() => setModalOpen(false)} onSave={handleSaveNew} />}
+      {modalOpen && (
+        <NuevaConsultaModal
+          onClose={() => setModalOpen(false)}
+          onSave={handleSaveNew}
+          patients={patients}
+          defaultDoctor={doctor.nombre}
+        />
+      )}
       {selectedConsulta && (
         <DetalleConsultaModal
           consulta={selectedConsulta}
           onClose={() => setSelectedConsulta(null)}
-          onUpdateSoap={handleUpdateSoap}
+          onUpdate={handleUpdate}
         />
       )}
     </div>

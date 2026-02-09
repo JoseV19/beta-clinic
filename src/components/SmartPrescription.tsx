@@ -13,6 +13,7 @@ import {
   Check,
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { usePersistentState } from '../hooks/usePersistentState'
 
 /* ── Types ─────────────────────────────────────────────── */
 
@@ -185,13 +186,21 @@ const DEFAULT_KITS: Kit[] = [
 
 /* ── Component ─────────────────────────────────────────── */
 
+interface SmartPrescriptionProps {
+  patients?: { id: number; nombre: string; documento: string }[]
+  selectedPatientId?: number
+  onSavePrescription?: (meds: { id: number; nombre: string; dosis: string; frecuencia: string; duracion: string; notas: string }[]) => void
+}
+
 let nextId = 1
 let nextKitId = 1
 
-export default function SmartPrescription() {
+export default function SmartPrescription({ patients, selectedPatientId, onSavePrescription }: SmartPrescriptionProps) {
   const [items, setItems] = useState<PrescriptionItem[]>([])
-  const [patientName, setPatientName] = useState('')
-  const [kits, setKits] = useState<Kit[]>(DEFAULT_KITS)
+  const selectedPatient = patients?.find(p => p.id === selectedPatientId)
+  const patientName = selectedPatient?.nombre ?? ''
+  const [customKits, setCustomKits] = usePersistentState<Kit[]>('beta_prescription_kits', [])
+  const kits = [...DEFAULT_KITS, ...customKits]
   const [kitSearch, setKitSearch] = useState('')
   const [editingId, setEditingId] = useState<number | null>(null)
 
@@ -310,20 +319,25 @@ export default function SmartPrescription() {
         duration,
       })),
     }
-    setKits(prev => [...prev, newKit])
+    setCustomKits(prev => [...prev, newKit])
     setShowSaveKit(false)
     setNewKitName('')
     toast.success(`Kit "${name}" guardado con ${items.length} medicamentos`)
   }
 
   function deleteKit(id: string) {
-    setKits(prev => prev.filter(k => k.id !== id))
+    setCustomKits(prev => prev.filter(k => k.id !== id))
     toast.success('Kit eliminado')
   }
 
   /* ── Output ──────────────────────────────────────────── */
 
   function handlePrint() {
+    if (onSavePrescription && items.length > 0) {
+      onSavePrescription(items.map(i => ({
+        id: i.id, nombre: i.drug, dosis: i.dose, frecuencia: i.frequency, duracion: i.duration, notas: '',
+      })))
+    }
     window.print()
   }
 
@@ -353,13 +367,12 @@ export default function SmartPrescription() {
     <div className="flex flex-col gap-5 lg:flex-row">
       {/* ════════ LEFT: Builder ════════ */}
       <div className="min-w-0 flex-1 space-y-5">
-        {/* ── Patient ──────────────────────────────────── */}
-        <input
-          value={patientName}
-          onChange={e => setPatientName(e.target.value)}
-          placeholder="Nombre del paciente..."
-          className="w-full rounded-lg border border-omega-violet/20 bg-white px-4 py-2.5 text-sm text-omega-dark outline-none placeholder:text-omega-dark/30 focus:border-omega-violet/40 dark:border-clinical-white/10 dark:bg-omega-surface dark:text-clinical-white dark:placeholder:text-clinical-white/25 dark:focus:border-omega-violet/40"
-        />
+        {/* ── Patient (shown from parent selector) ──── */}
+        {patientName && (
+          <div className="rounded-lg border border-clinical-white/10 bg-omega-surface px-4 py-2.5 text-sm font-medium text-clinical-white">
+            {patientName}
+          </div>
+        )}
 
         {/* ── Kit search + grid ────────────────────────── */}
         <div className="rounded-xl border border-omega-violet/15 bg-white p-4 dark:border-clinical-white/[0.06] dark:bg-omega-surface">

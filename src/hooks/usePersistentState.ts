@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 
 export function usePersistentState<T>(key: string, defaultValue: T) {
   const [value, setValue] = useState<T>(() => {
@@ -10,9 +10,25 @@ export function usePersistentState<T>(key: string, defaultValue: T) {
     }
   })
 
+  const prevKeyRef = useRef(key)
+
   useEffect(() => {
-    localStorage.setItem(key, JSON.stringify(value))
-  }, [key, value])
+    if (prevKeyRef.current !== key) {
+      // Key changed → load value for the new key
+      prevKeyRef.current = key
+      try {
+        const stored = localStorage.getItem(key)
+        setValue(stored ? (JSON.parse(stored) as T) : defaultValue)
+      } catch {
+        setValue(defaultValue)
+      }
+    } else {
+      // Same key → persist current value
+      try {
+        localStorage.setItem(key, JSON.stringify(value))
+      } catch { /* ignore quota */ }
+    }
+  }, [key, value]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const reset = useCallback(() => setValue(defaultValue), [defaultValue])
 

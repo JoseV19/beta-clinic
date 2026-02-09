@@ -1,18 +1,25 @@
 import { useCallback, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { Calculator, UtensilsCrossed } from 'lucide-react'
+import { Calculator, UtensilsCrossed, ChevronDown } from 'lucide-react'
 import MetabolicCalculator, { type MetabolicResults } from '../../components/nutrition/MetabolicCalculator'
 import MealPlanner from '../../components/nutrition/MealPlanner'
+import { useData } from '../../context/DataContext'
 
 type Tab = 'calculadora' | 'planificador'
 
 export default function NutritionDashboard() {
   const location = useLocation()
   const navigate = useNavigate()
+  const { patients } = useData()
   const tab: Tab = location.pathname === '/planificador' ? 'planificador' : 'calculadora'
+
+  const [selectedPatientId, setSelectedPatientId] = useState(0)
+  const selectedPatient = patients.find(p => p.id === selectedPatientId)
 
   const [results, setResults] = useState<MetabolicResults | null>(null)
   const handleResults = useCallback((r: MetabolicResults | null) => setResults(r), [])
+
+  const inputCls = 'w-full rounded-lg border border-clinical-white/10 bg-omega-abyss px-3 py-2 text-sm text-clinical-white outline-none placeholder:text-clinical-white/30 focus:border-beta-mint/30 focus:ring-2 focus:ring-beta-mint/10 appearance-none'
 
   return (
     <div className="mx-auto max-w-7xl space-y-6">
@@ -24,6 +31,34 @@ export default function NutritionDashboard() {
         <p className="mt-0.5 text-sm text-omega-dark/50 dark:text-clinical-white/40">
           Herramientas de cálculo metabólico y planificación alimentaria
         </p>
+      </div>
+
+      {/* Patient selector */}
+      <div className="rounded-xl border border-omega-violet/20 bg-white p-4 dark:border-clinical-white/10 dark:bg-omega-surface">
+        <label className="mb-1 block text-xs font-medium text-omega-dark/50 dark:text-clinical-white/50">
+          Paciente
+        </label>
+        <div className="relative">
+          <select
+            value={selectedPatientId}
+            onChange={e => setSelectedPatientId(Number(e.target.value))}
+            className={inputCls}
+          >
+            <option value={0}>Seleccionar paciente...</option>
+            {patients.map(p => (
+              <option key={p.id} value={p.id}>{p.nombre}</option>
+            ))}
+          </select>
+          <ChevronDown
+            size={14}
+            className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-clinical-white/30"
+          />
+        </div>
+        {selectedPatient && (
+          <p className="mt-2 text-xs text-omega-dark/40 dark:text-clinical-white/30">
+            {selectedPatient.edad} · {selectedPatient.genero}
+          </p>
+        )}
       </div>
 
       {/* Tabs */}
@@ -60,6 +95,8 @@ export default function NutritionDashboard() {
       {/* Tab: Planificador */}
       {tab === 'planificador' && (
         <MealPlanner
+          patientId={selectedPatientId > 0 ? selectedPatientId : undefined}
+          patientName={selectedPatient?.nombre}
           patientWeight={results?.weight}
           patientBmi={results?.bmi}
         />

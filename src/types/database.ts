@@ -149,3 +149,61 @@ export interface Reminder {
   sent_at: string
   delivered: boolean
 }
+
+/* ── CIE-10 (ICD-10) ──────────────────────────────────────────────────── */
+
+export interface CIE10Code {
+  codigo: string       // e.g. "J06.9"
+  descripcion: string  // e.g. "Infección aguda de las vías respiratorias superiores"
+  capitulo?: string    // e.g. "X"
+}
+
+/* ── Facturación ───────────────────────────────────────────────────────── */
+
+export type InvoiceStatus = 'borrador' | 'emitida' | 'pagada' | 'anulada'
+export type PaymentMethod = 'efectivo' | 'tarjeta' | 'transferencia'
+export type InvoiceCurrency = 'USD' | 'GTQ'
+
+export interface InvoiceItem {
+  id: number
+  descripcion: string
+  cantidad: number
+  precioUnitario: number
+  total: number
+}
+
+export interface Invoice {
+  id: number
+  numero: string
+  fecha: string
+  pacienteId: number
+  pacienteNombre: string
+  nit: string
+  items: InvoiceItem[]
+  subtotal: number
+  iva: number
+  total: number
+  currency: InvoiceCurrency
+  estado: InvoiceStatus
+  metodoPago?: PaymentMethod
+  notas?: string
+  felAutorizacion?: string
+  felSerie?: string
+  createdAt: string
+  updatedAt: string
+}
+
+/* ── WhatsApp ──────────────────────────────────────────────────────────── */
+
+export type WhatsAppMessageStatus = 'pendiente' | 'enviado' | 'entregado' | 'error'
+
+export interface WhatsAppMessage {
+  id: string
+  pacienteId?: number
+  phone: string
+  message: string
+  templateId?: string
+  status: WhatsAppMessageStatus
+  sentAt?: string
+  channel: 'wa_link' | 'wa_api'
+}

@@ -1,8 +1,9 @@
 import { useMemo, useCallback } from 'react'
 import { Calendar, dateFnsLocalizer, type View } from 'react-big-calendar'
-import { format, parse, startOfWeek, getDay, setHours, setMinutes } from 'date-fns'
+import { format, parse, startOfWeek, getDay, setHours, setMinutes, addMinutes } from 'date-fns'
 import { es } from 'date-fns/locale/es'
 import { toast } from 'sonner'
+import type { AgendaAppointment } from '../types/phase2'
 
 import 'react-big-calendar/lib/css/react-big-calendar.css'
 import './calendar-omega.css'
@@ -21,47 +22,25 @@ const localizer = dateFnsLocalizer({
 
 /* ── Event types ──────────────────────────────────────── */
 
-export interface CalendarEvent {
+interface CalendarEvent {
   id: number
   title: string
   start: Date
   end: Date
-  type: 'consulta' | 'urgencia' | 'control' | 'laboratorio'
+  type: string
   doctor: string
+  appointment: AgendaAppointment
 }
 
 /* ── Color map ────────────────────────────────────────── */
 
-const EVENT_COLORS: Record<CalendarEvent['type'], string> = {
-  consulta: '#3B82F6',    // blue
-  urgencia: '#EF4444',    // red
-  control: '#10B981',     // green
-  laboratorio: '#F59E0B', // amber
+const EVENT_COLORS: Record<string, string> = {
+  consulta: '#3B82F6',
+  urgencia: '#EF4444',
+  control: '#10B981',
+  laboratorio: '#F59E0B',
+  especialista: '#8B5CF6',
 }
-
-/* ── Mock data ────────────────────────────────────────── */
-
-function buildDate(dayOffset: number, hour: number, minute = 0): Date {
-  const today = new Date()
-  const d = new Date(today)
-  d.setDate(today.getDate() + dayOffset)
-  return setMinutes(setHours(d, hour), minute)
-}
-
-const mockAppointments: CalendarEvent[] = [
-  { id: 1,  title: 'Consulta - María García',      start: buildDate(0, 9),    end: buildDate(0, 9, 30),   type: 'consulta',    doctor: 'Dr. Valiente' },
-  { id: 2,  title: 'Urgencia - Carlos López',       start: buildDate(0, 10),   end: buildDate(0, 10, 45),  type: 'urgencia',    doctor: 'Dr. Valiente' },
-  { id: 3,  title: 'Control - Ana Torres',          start: buildDate(0, 14),   end: buildDate(0, 14, 30),  type: 'control',     doctor: 'Dra. Mendoza' },
-  { id: 4,  title: 'Laboratorio - Luis Ramírez',    start: buildDate(1, 8),    end: buildDate(1, 8, 30),   type: 'laboratorio', doctor: 'Dr. Valiente' },
-  { id: 5,  title: 'Consulta - Sofía Mendoza',      start: buildDate(1, 11),   end: buildDate(1, 11, 30),  type: 'consulta',    doctor: 'Dra. Mendoza' },
-  { id: 6,  title: 'Control - Jorge Castillo',      start: buildDate(1, 15),   end: buildDate(1, 15, 30),  type: 'control',     doctor: 'Dr. Valiente' },
-  { id: 7,  title: 'Consulta - Valentina Ruiz',     start: buildDate(2, 9),    end: buildDate(2, 9, 30),   type: 'consulta',    doctor: 'Dra. Mendoza' },
-  { id: 8,  title: 'Urgencia - Andrés Morales',     start: buildDate(2, 12),   end: buildDate(2, 12, 30),  type: 'urgencia',    doctor: 'Dr. Valiente' },
-  { id: 9,  title: 'Consulta - Camila Herrera',     start: buildDate(-1, 10),  end: buildDate(-1, 10, 30), type: 'consulta',    doctor: 'Dra. Mendoza' },
-  { id: 10, title: 'Control - Diego Vargas',        start: buildDate(-1, 16),  end: buildDate(-1, 16, 30), type: 'control',     doctor: 'Dr. Valiente' },
-  { id: 11, title: 'Consulta - Isabella Rojas',     start: buildDate(3, 9),    end: buildDate(3, 9, 30),   type: 'consulta',    doctor: 'Dr. Valiente' },
-  { id: 12, title: 'Laboratorio - Mateo Ríos',      start: buildDate(3, 14),   end: buildDate(3, 14, 30),  type: 'laboratorio', doctor: 'Dra. Mendoza' },
-]
 
 /* ── Messages (español) ───────────────────────────────── */
 
@@ -83,11 +62,34 @@ const messages = {
 /* ── Component ─────────────────────────────────────────── */
 
 interface Props {
+  appointments: AgendaAppointment[]
+  onSelectAppointment?: (a: AgendaAppointment) => void
   defaultView?: View
 }
 
-export default function CalendarWidget({ defaultView = 'week' }: Props) {
-  /* Event styles by type */
+export default function CalendarWidget({ appointments, onSelectAppointment, defaultView = 'week' }: Props) {
+  const events = useMemo<CalendarEvent[]>(() =>
+    appointments.map((a) => {
+      const [h, m] = a.hora.split(':').map(Number)
+      const dateStr = a.fecha + 'T12:00:00'
+      const base = new Date(dateStr)
+      base.setHours(h, m, 0, 0)
+      const start = new Date(base)
+      const end = addMinutes(start, a.duracion || 30)
+
+      return {
+        id: a.id,
+        title: `${a.tipo.charAt(0).toUpperCase() + a.tipo.slice(1)} - ${a.patientName}`,
+        start,
+        end,
+        type: a.tipo,
+        doctor: a.doctor,
+        appointment: a,
+      }
+    }),
+    [appointments],
+  )
+
   const eventPropGetter = useCallback((event: CalendarEvent) => ({
     style: {
       backgroundColor: EVENT_COLORS[event.type] ?? '#3B82F6',
@@ -95,21 +97,22 @@ export default function CalendarWidget({ defaultView = 'week' }: Props) {
     },
   }), [])
 
-  /* Click on event */
   const handleSelectEvent = useCallback((event: CalendarEvent) => {
-    toast.success(
-      `${event.title}\n${format(event.start, 'HH:mm')} – ${format(event.end, 'HH:mm')}\nDoctor: ${event.doctor}`,
-    )
-  }, [])
+    if (onSelectAppointment) {
+      onSelectAppointment(event.appointment)
+    } else {
+      toast.success(
+        `${event.title}\n${format(event.start, 'HH:mm')} – ${format(event.end, 'HH:mm')}\nDoctor: ${event.doctor}`,
+      )
+    }
+  }, [onSelectAppointment])
 
-  /* Click on empty slot */
   const handleSelectSlot = useCallback(({ start }: { start: Date }) => {
     const hora = format(start, 'HH:mm')
     const fecha = format(start, 'dd/MM/yyyy')
     toast.success(`Nueva cita: ${fecha} a las ${hora}`)
   }, [])
 
-  /* Min/max hours for week/day view */
   const minTime = useMemo(() => setMinutes(setHours(new Date(), 7), 0), [])
   const maxTime = useMemo(() => setMinutes(setHours(new Date(), 20), 0), [])
 
@@ -117,7 +120,7 @@ export default function CalendarWidget({ defaultView = 'week' }: Props) {
     <div className="h-[calc(100vh-180px)] min-h-[500px]">
       <Calendar<CalendarEvent>
         localizer={localizer}
-        events={mockAppointments}
+        events={events}
         defaultView={defaultView}
         views={['month', 'week', 'day', 'agenda']}
         messages={messages}
@@ -134,7 +137,7 @@ export default function CalendarWidget({ defaultView = 'week' }: Props) {
         formats={{
           dayHeaderFormat: (date: Date) => format(date, "EEEE d 'de' MMMM", { locale: es }),
           dayRangeHeaderFormat: ({ start, end }: { start: Date; end: Date }) =>
-            `${format(start, "d MMM", { locale: es })} – ${format(end, "d MMM yyyy", { locale: es })}`,
+            `${format(start, 'd MMM', { locale: es })} – ${format(end, 'd MMM yyyy', { locale: es })}`,
           timeGutterFormat: (date: Date) => format(date, 'HH:mm'),
           eventTimeRangeFormat: ({ start, end }: { start: Date; end: Date }) =>
             `${format(start, 'HH:mm')} – ${format(end, 'HH:mm')}`,

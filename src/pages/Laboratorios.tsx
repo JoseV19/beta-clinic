@@ -1,4 +1,5 @@
 import { useState, type DragEvent } from 'react'
+import { AnimatePresence, motion } from 'framer-motion'
 import {
   FlaskConical,
   Upload,
@@ -6,337 +7,395 @@ import {
   Download,
   Trash2,
   Plus,
-  TrendingUp,
+  X,
+  ChevronDown,
+  ChevronUp,
+  Search,
 } from 'lucide-react'
+import { toast } from 'sonner'
+import { useData } from '../context/DataContext'
+import { usePersistentState } from '../hooks/usePersistentState'
+import ConfirmDialog from '../components/ui/ConfirmDialog'
 
 /* ── Types ─────────────────────────────────────────────── */
 
-interface Exam {
-  id: number
-  nombre: string
-  fecha: string
-  estado: 'pendiente' | 'completado'
-  doctor: string
-}
-
-interface UploadedFile {
-  id: number
+interface LabFile {
   name: string
-  size: string
+  size: number
   date: string
 }
 
-interface TrendPoint {
+interface LabOrder {
+  id: number
+  patientId: number
+  patientName: string
+  examName: string
+  doctor: string
   fecha: string
-  valor: number
+  estado: 'pendiente' | 'en_proceso' | 'completado'
+  resultados?: string
+  archivos: LabFile[]
+  createdAt: string
 }
 
-/* ── Mock data ─────────────────────────────────────────── */
+type LabStatus = LabOrder['estado']
 
-const pacientes = [
-  'María García',
-  'Carlos López',
-  'Ana Torres',
-  'Luis Ramírez',
-  'Sofía Mendoza',
-]
-
-const mockExams: Exam[] = [
-  { id: 1, nombre: 'Hemograma completo', fecha: '2026-02-05', estado: 'pendiente', doctor: 'Dr. Rodríguez' },
-  { id: 2, nombre: 'Perfil lipídico', fecha: '2026-02-04', estado: 'completado', doctor: 'Dr. Herrera' },
-  { id: 3, nombre: 'Glicemia en ayunas', fecha: '2026-02-03', estado: 'completado', doctor: 'Dr. Rodríguez' },
-  { id: 4, nombre: 'TSH y T4 libre', fecha: '2026-02-01', estado: 'pendiente', doctor: 'Dra. Martínez' },
-  { id: 5, nombre: 'Uroanálisis', fecha: '2026-01-28', estado: 'completado', doctor: 'Dr. Rodríguez' },
-  { id: 6, nombre: 'Creatinina sérica', fecha: '2026-01-25', estado: 'completado', doctor: 'Dr. Herrera' },
-]
-
-const initialTrend: TrendPoint[] = [
-  { fecha: '2025-08', valor: 110 },
-  { fecha: '2025-10', valor: 105 },
-  { fecha: '2025-12', valor: 98 },
-  { fecha: '2026-01', valor: 92 },
-  { fecha: '2026-02', valor: 95 },
-]
-
-/* ── SVG Line Chart ────────────────────────────────────── */
-
-function TrendChart({ data }: { data: TrendPoint[] }) {
-  if (data.length < 2) {
-    return (
-      <div className="flex h-40 items-center justify-center text-sm text-omega-dark/30 dark:text-clinical-white/20">
-        Se necesitan al menos 2 puntos
-      </div>
-    )
-  }
-
-  const W = 400
-  const H = 160
-  const PAD_X = 40
-  const PAD_Y = 20
-  const chartW = W - PAD_X * 2
-  const chartH = H - PAD_Y * 2
-
-  const vals = data.map((d) => d.valor)
-  const min = Math.min(...vals) - 10
-  const max = Math.max(...vals) + 10
-  const range = max - min || 1
-
-  const points = data.map((d, i) => ({
-    x: PAD_X + (i / (data.length - 1)) * chartW,
-    y: PAD_Y + chartH - ((d.valor - min) / range) * chartH,
-    ...d,
-  }))
-
-  const linePath = points.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x},${p.y}`).join(' ')
-  const areaPath = `${linePath} L${points[points.length - 1].x},${PAD_Y + chartH} L${points[0].x},${PAD_Y + chartH} Z`
-
-  return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="w-full" preserveAspectRatio="xMidYMid meet">
-      {/* Grid lines */}
-      {[0, 0.25, 0.5, 0.75, 1].map((t) => {
-        const y = PAD_Y + chartH - t * chartH
-        const val = Math.round(min + t * range)
-        return (
-          <g key={t}>
-            <line x1={PAD_X} y1={y} x2={W - PAD_X} y2={y} stroke="currentColor" className="text-omega-dark/10 dark:text-clinical-white/10" strokeDasharray="4 4" />
-            <text x={PAD_X - 6} y={y + 3} textAnchor="end" className="fill-omega-dark/40 dark:fill-clinical-white/30 text-[9px]">{val}</text>
-          </g>
-        )
-      })}
-
-      {/* Area fill */}
-      <path d={areaPath} fill="url(#mintGrad)" opacity="0.2" />
-
-      {/* Line */}
-      <path d={linePath} fill="none" stroke="#7FFFD4" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-
-      {/* Dots & labels */}
-      {points.map((p) => (
-        <g key={p.fecha}>
-          <circle cx={p.x} cy={p.y} r="4" fill="#7FFFD4" stroke="#4A148C" strokeWidth="2" />
-          <text x={p.x} y={p.y - 10} textAnchor="middle" className="fill-omega-dark dark:fill-clinical-white text-[9px] font-semibold">{p.valor}</text>
-          <text x={p.x} y={PAD_Y + chartH + 14} textAnchor="middle" className="fill-omega-dark/40 dark:fill-clinical-white/30 text-[8px]">{p.fecha}</text>
-        </g>
-      ))}
-
-      {/* Gradient def */}
-      <defs>
-        <linearGradient id="mintGrad" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#7FFFD4" />
-          <stop offset="100%" stopColor="#7FFFD4" stopOpacity="0" />
-        </linearGradient>
-      </defs>
-    </svg>
-  )
+const STATUS_CONFIG: Record<LabStatus, { label: string; cls: string }> = {
+  pendiente: { label: 'Pendiente', cls: 'bg-amber-500/15 text-amber-400' },
+  en_proceso: { label: 'En Proceso', cls: 'bg-blue-500/15 text-blue-400' },
+  completado: { label: 'Completado', cls: 'bg-emerald-500/15 text-emerald-400' },
 }
 
 /* ── Component ─────────────────────────────────────────── */
 
 export default function Laboratorios() {
-  const [paciente, setPaciente] = useState(pacientes[0])
-  const [files, setFiles] = useState<UploadedFile[]>([
-    { id: 1, name: 'hemograma_2026-02-04.pdf', size: '245 KB', date: '2026-02-04' },
-    { id: 2, name: 'perfil_lipidico_2026-01.pdf', size: '180 KB', date: '2026-01-28' },
-  ])
+  const { patients } = useData()
+  const [orders, setOrders] = usePersistentState<LabOrder[]>('beta_lab_orders', [])
+
+  const [showNew, setShowNew] = useState(false)
+  const [expandedId, setExpandedId] = useState<number | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<LabOrder | null>(null)
+  const [search, setSearch] = useState('')
+
+  /* New order form */
+  const [newPatientId, setNewPatientId] = useState(0)
+  const [newExam, setNewExam] = useState('')
+  const [newDoctor, setNewDoctor] = useState('')
+
+  const filtered = orders.filter(o =>
+    o.patientName.toLowerCase().includes(search.toLowerCase()) ||
+    o.examName.toLowerCase().includes(search.toLowerCase()),
+  )
+
+  /* ── CRUD ────────────────────────────────────────────── */
+
+  function handleCreateOrder() {
+    const pat = patients.find(p => p.id === newPatientId)
+    if (!pat) { toast.error('Selecciona un paciente'); return }
+    if (!newExam.trim()) { toast.error('Ingresa el nombre del examen'); return }
+
+    const id = orders.length > 0 ? Math.max(...orders.map(o => o.id)) + 1 : 1
+    const order: LabOrder = {
+      id,
+      patientId: pat.id,
+      patientName: pat.nombre,
+      examName: newExam.trim(),
+      doctor: newDoctor.trim() || 'Sin especificar',
+      fecha: new Date().toISOString().split('T')[0],
+      estado: 'pendiente',
+      archivos: [],
+      createdAt: new Date().toISOString(),
+    }
+    setOrders(prev => [order, ...prev])
+    toast.success('Orden creada')
+    setShowNew(false)
+    setNewPatientId(0)
+    setNewExam('')
+    setNewDoctor('')
+  }
+
+  function updateStatus(id: number, estado: LabStatus) {
+    setOrders(prev => prev.map(o => o.id === id ? { ...o, estado } : o))
+    toast.success(`Estado actualizado: ${STATUS_CONFIG[estado].label}`)
+  }
+
+  function updateResultados(id: number, resultados: string) {
+    setOrders(prev => prev.map(o => o.id === id ? { ...o, resultados } : o))
+  }
+
+  function handleDelete() {
+    if (!deleteTarget) return
+    setOrders(prev => prev.filter(o => o.id !== deleteTarget.id))
+    setDeleteTarget(null)
+    toast.success('Orden eliminada')
+  }
+
+  /* ── File handling ───────────────────────────────────── */
+
+  function handleFiles(orderId: number, fileList: FileList | File[]) {
+    const newFiles: LabFile[] = Array.from(fileList).map(f => ({
+      name: f.name,
+      size: f.size,
+      date: new Date().toISOString().split('T')[0],
+    }))
+    setOrders(prev => prev.map(o =>
+      o.id === orderId ? { ...o, archivos: [...o.archivos, ...newFiles] } : o,
+    ))
+    toast.success(`${newFiles.length} archivo(s) adjuntado(s)`)
+  }
+
+  function removeFile(orderId: number, fileName: string) {
+    setOrders(prev => prev.map(o =>
+      o.id === orderId ? { ...o, archivos: o.archivos.filter(f => f.name !== fileName) } : o,
+    ))
+  }
+
+  const inputCls = 'w-full rounded-lg border border-clinical-white/10 bg-omega-abyss px-3 py-2 text-sm text-clinical-white outline-none placeholder:text-clinical-white/30 focus:border-beta-mint/30 focus:ring-2 focus:ring-beta-mint/10'
+
+  return (
+    <div className="mx-auto max-w-5xl space-y-6">
+      {/* Header */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-clinical-white">Laboratorios</h1>
+          <p className="mt-0.5 text-sm text-clinical-white/40">
+            {orders.length} órdenes registradas
+          </p>
+        </div>
+        <button
+          onClick={() => setShowNew(true)}
+          className="flex items-center gap-2 rounded-lg bg-beta-mint px-4 py-2 text-sm font-semibold text-omega-dark shadow-md shadow-beta-mint/20 transition-all hover:bg-beta-mint/80 active:scale-[0.97]"
+        >
+          <Plus size={18} />
+          Nueva Orden
+        </button>
+      </div>
+
+      {/* Search */}
+      <div className="relative">
+        <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-clinical-white/25" />
+        <input
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="Buscar por paciente o examen..."
+          className="w-full rounded-xl border border-clinical-white/10 bg-omega-surface py-2.5 pl-10 pr-4 text-sm text-clinical-white outline-none placeholder:text-clinical-white/30 focus:border-beta-mint/30 focus:ring-2 focus:ring-beta-mint/10"
+        />
+      </div>
+
+      {/* New order modal */}
+      <AnimatePresence>
+        {showNew && (
+          <motion.div
+            className="fixed inset-0 z-50 flex items-center justify-center p-4"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setShowNew(false)} />
+            <motion.div
+              className="relative w-full max-w-md rounded-2xl border border-clinical-white/10 bg-omega-surface p-6 shadow-2xl"
+              initial={{ opacity: 0, scale: 0.92 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.92 }}
+              transition={{ type: 'spring', duration: 0.25, bounce: 0.1 }}
+            >
+              <div className="mb-5 flex items-center justify-between">
+                <h2 className="text-lg font-bold text-clinical-white">Nueva Orden de Laboratorio</h2>
+                <button onClick={() => setShowNew(false)} className="rounded-lg p-1.5 text-clinical-white/40 hover:bg-clinical-white/5" aria-label="Cerrar">
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-clinical-white/50">Paciente *</label>
+                  <select value={newPatientId} onChange={e => setNewPatientId(Number(e.target.value))} className={inputCls}>
+                    <option value={0}>Seleccionar paciente...</option>
+                    {patients.map(p => (
+                      <option key={p.id} value={p.id}>{p.nombre}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-clinical-white/50">Examen *</label>
+                  <input value={newExam} onChange={e => setNewExam(e.target.value)} placeholder="Hemograma completo" className={inputCls} />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-clinical-white/50">Doctor</label>
+                  <input value={newDoctor} onChange={e => setNewDoctor(e.target.value)} placeholder="Dr. Rodríguez" className={inputCls} />
+                </div>
+              </div>
+
+              <div className="mt-5 flex justify-end gap-2">
+                <button onClick={() => setShowNew(false)} className="rounded-lg border border-clinical-white/10 px-4 py-2 text-xs font-medium text-clinical-white/60 hover:bg-clinical-white/5">
+                  Cancelar
+                </button>
+                <button onClick={handleCreateOrder} className="rounded-lg bg-omega-violet px-5 py-2 text-xs font-semibold text-white hover:bg-omega-violet/80">
+                  Crear Orden
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Orders list */}
+      {filtered.length > 0 ? (
+        <div className="space-y-3">
+          {filtered.map(order => {
+            const isExpanded = expandedId === order.id
+            const sCfg = STATUS_CONFIG[order.estado]
+            return (
+              <div
+                key={order.id}
+                className="overflow-hidden rounded-xl border border-clinical-white/10 bg-omega-surface transition-shadow hover:shadow-md"
+              >
+                {/* Summary row */}
+                <button
+                  onClick={() => setExpandedId(isExpanded ? null : order.id)}
+                  className="flex w-full items-center gap-4 px-5 py-4 text-left"
+                >
+                  <FlaskConical size={18} className="shrink-0 text-beta-mint" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-clinical-white">{order.examName}</p>
+                    <p className="text-xs text-clinical-white/40">{order.patientName} · {order.fecha} · {order.doctor}</p>
+                  </div>
+                  <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${sCfg.cls}`}>
+                    {sCfg.label}
+                  </span>
+                  {isExpanded ? <ChevronUp size={16} className="text-clinical-white/30" /> : <ChevronDown size={16} className="text-clinical-white/30" />}
+                </button>
+
+                {/* Expanded details */}
+                <AnimatePresence>
+                  {isExpanded && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: 'auto', opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      transition={{ duration: 0.2 }}
+                      className="overflow-hidden"
+                    >
+                      <div className="border-t border-clinical-white/5 px-5 py-4 space-y-4">
+                        {/* Status changer */}
+                        <div>
+                          <label className="mb-1 block text-xs font-medium text-clinical-white/50">Estado</label>
+                          <div className="flex gap-1.5">
+                            {(Object.keys(STATUS_CONFIG) as LabStatus[]).map(s => (
+                              <button
+                                key={s}
+                                onClick={() => updateStatus(order.id, s)}
+                                className={`rounded-md px-3 py-1.5 text-xs font-semibold transition-all ${
+                                  order.estado === s
+                                    ? STATUS_CONFIG[s].cls + ' ring-1 ring-current'
+                                    : 'text-clinical-white/40 hover:text-clinical-white/60'
+                                }`}
+                              >
+                                {STATUS_CONFIG[s].label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Results */}
+                        <div>
+                          <label className="mb-1 block text-xs font-medium text-clinical-white/50">Resultados / Notas</label>
+                          <textarea
+                            value={order.resultados || ''}
+                            onChange={e => updateResultados(order.id, e.target.value)}
+                            rows={3}
+                            placeholder="Escribir resultados del examen..."
+                            className={`${inputCls} resize-none`}
+                          />
+                        </div>
+
+                        {/* File upload */}
+                        <div>
+                          <label className="mb-1 block text-xs font-medium text-clinical-white/50">Archivos</label>
+                          <DropZone orderId={order.id} onFiles={handleFiles} />
+                          {order.archivos.length > 0 && (
+                            <div className="mt-2 space-y-1.5">
+                              {order.archivos.map(f => (
+                                <div key={f.name} className="flex items-center gap-2 rounded-lg border border-clinical-white/5 bg-omega-abyss px-3 py-2">
+                                  <FileText size={14} className="shrink-0 text-beta-mint" />
+                                  <span className="min-w-0 flex-1 truncate text-xs text-clinical-white">{f.name}</span>
+                                  <span className="text-[10px] text-clinical-white/30">{(f.size / 1024).toFixed(0)} KB</span>
+                                  <button onClick={() => {}} className="p-0.5 text-clinical-white/20 hover:text-beta-mint" aria-label="Descargar">
+                                    <Download size={12} />
+                                  </button>
+                                  <button onClick={() => removeFile(order.id, f.name)} className="p-0.5 text-clinical-white/20 hover:text-red-400" aria-label="Eliminar archivo">
+                                    <Trash2 size={12} />
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Delete */}
+                        <div className="flex justify-end">
+                          <button
+                            onClick={() => setDeleteTarget(order)}
+                            className="flex items-center gap-1.5 text-xs font-medium text-red-400/60 hover:text-red-400"
+                          >
+                            <Trash2 size={12} />
+                            Eliminar orden
+                          </button>
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            )
+          })}
+        </div>
+      ) : (
+        <div className="rounded-xl border border-dashed border-clinical-white/10 py-16 text-center">
+          <FlaskConical size={40} className="mx-auto text-clinical-white/15" />
+          <p className="mt-3 text-sm font-medium text-clinical-white/40">
+            {search ? 'No se encontraron órdenes' : 'No hay órdenes de laboratorio'}
+          </p>
+          {!search && (
+            <button
+              onClick={() => setShowNew(true)}
+              className="mt-3 text-xs font-semibold text-beta-mint hover:text-beta-mint/80"
+            >
+              + Crear la primera orden
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Delete confirmation */}
+      <ConfirmDialog
+        open={!!deleteTarget}
+        title="Eliminar Orden"
+        message={`¿Eliminar la orden "${deleteTarget?.examName}" de ${deleteTarget?.patientName}?`}
+        confirmLabel="Eliminar"
+        variant="danger"
+        onConfirm={handleDelete}
+        onCancel={() => setDeleteTarget(null)}
+      />
+    </div>
+  )
+}
+
+/* ── Drop zone sub-component ────────────────────────────── */
+
+function DropZone({ orderId, onFiles }: { orderId: number; onFiles: (id: number, files: FileList | File[]) => void }) {
   const [dragOver, setDragOver] = useState(false)
-  const [trendData, setTrendData] = useState<TrendPoint[]>(initialTrend)
-  const [newVal, setNewVal] = useState('')
-  const [newFecha, setNewFecha] = useState('')
 
   function handleDrop(e: DragEvent) {
     e.preventDefault()
     setDragOver(false)
-    const droppedFiles = Array.from(e.dataTransfer.files)
-    const newFiles: UploadedFile[] = droppedFiles.map((f) => ({
-      id: Date.now() + Math.random(),
-      name: f.name,
-      size: `${(f.size / 1024).toFixed(0)} KB`,
-      date: new Date().toISOString().split('T')[0],
-    }))
-    setFiles((prev) => [...newFiles, ...prev])
+    if (e.dataTransfer.files.length) onFiles(orderId, e.dataTransfer.files)
   }
 
-  function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
-    const selected = e.target.files
-    if (!selected) return
-    const newFiles: UploadedFile[] = Array.from(selected).map((f) => ({
-      id: Date.now() + Math.random(),
-      name: f.name,
-      size: `${(f.size / 1024).toFixed(0)} KB`,
-      date: new Date().toISOString().split('T')[0],
-    }))
-    setFiles((prev) => [...newFiles, ...prev])
+  function handleSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    if (e.target.files?.length) onFiles(orderId, e.target.files)
     e.target.value = ''
   }
 
-  function removeFile(id: number) {
-    setFiles((prev) => prev.filter((f) => f.id !== id))
-  }
-
-  function addTrendPoint() {
-    const val = Number(newVal)
-    if (!val || !newFecha) return
-    setTrendData((prev) => [...prev, { fecha: newFecha, valor: val }].sort((a, b) => a.fecha.localeCompare(b.fecha)))
-    setNewVal('')
-    setNewFecha('')
-  }
-
-  const inputClass =
-    'w-full rounded-lg border border-omega-violet/20 bg-clinical-white px-3 py-2 text-sm text-omega-dark outline-none focus:border-omega-violet/40 focus:ring-2 focus:ring-omega-violet/10 dark:border-clinical-white/10 dark:bg-omega-abyss dark:text-clinical-white dark:focus:border-beta-mint/30 dark:focus:ring-beta-mint/10'
-
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-omega-dark dark:text-clinical-white">Laboratorios</h1>
-        <p className="mt-0.5 text-sm text-omega-dark/50 dark:text-clinical-white/40">
-          Gestión de exámenes y resultados
-        </p>
-      </div>
-
-      {/* Patient selector */}
-      <div className="rounded-xl border border-omega-violet/20 bg-white p-4 dark:border-clinical-white/10 dark:bg-omega-surface">
-        <label className="mb-1 block text-xs font-medium text-omega-dark/60 dark:text-clinical-white/40">Paciente</label>
-        <select value={paciente} onChange={(e) => setPaciente(e.target.value)} className={inputClass}>
-          {pacientes.map((p) => <option key={p} value={p}>{p}</option>)}
-        </select>
-      </div>
-
-      {/* Two-column layout */}
-      <div className="grid gap-6 lg:grid-cols-2">
-        {/* ── Left: Exams list ─────────────────────────── */}
-        <div className="overflow-hidden rounded-xl border border-omega-violet/20 bg-white dark:border-clinical-white/10 dark:bg-omega-surface">
-          <div className="flex items-center gap-2 border-b border-omega-violet/10 px-5 py-4 dark:border-clinical-white/5">
-            <FlaskConical size={18} className="text-omega-violet dark:text-beta-mint" />
-            <h2 className="text-base font-semibold text-omega-dark dark:text-clinical-white">
-              Exámenes Solicitados
-            </h2>
-          </div>
-
-          <div className="divide-y divide-omega-violet/5 dark:divide-clinical-white/5">
-            {mockExams.map((ex) => (
-              <div key={ex.id} className="flex items-center gap-3 px-5 py-3 transition-colors hover:bg-omega-violet/[0.02] dark:hover:bg-clinical-white/5">
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-omega-dark dark:text-clinical-white">{ex.nombre}</p>
-                  <p className="text-xs text-omega-dark/50 dark:text-clinical-white/40">{ex.fecha} · {ex.doctor}</p>
-                </div>
-                <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                  ex.estado === 'completado'
-                    ? 'bg-beta-mint/15 text-emerald-700 dark:text-beta-mint'
-                    : 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400'
-                }`}>
-                  {ex.estado === 'completado' ? 'Completado' : 'Pendiente'}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* ── Right: Upload area ───────────────────────── */}
-        <div className="space-y-4">
-          {/* Drop zone */}
-          <div
-            onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
-            onDragLeave={() => setDragOver(false)}
-            onDrop={handleDrop}
-            className={`relative flex flex-col items-center justify-center rounded-xl border-2 border-dashed px-6 py-10 text-center transition-colors ${
-              dragOver
-                ? 'border-beta-mint bg-beta-mint/10 dark:bg-beta-mint/5'
-                : 'border-omega-violet/20 bg-white hover:border-omega-violet/40 dark:border-clinical-white/10 dark:bg-omega-surface dark:hover:border-clinical-white/20'
-            }`}
-          >
-            <Upload size={32} className={`mb-3 ${dragOver ? 'text-beta-mint' : 'text-omega-dark/25 dark:text-clinical-white/20'}`} />
-            <p className="text-sm font-medium text-omega-dark/70 dark:text-clinical-white/50">
-              Arrastra archivos aquí o{' '}
-              <label className="cursor-pointer font-semibold text-omega-violet underline decoration-omega-violet/30 hover:decoration-omega-violet dark:text-beta-mint dark:decoration-beta-mint/30 dark:hover:decoration-beta-mint">
-                selecciona
-                <input type="file" multiple accept=".pdf,.png,.jpg,.jpeg" onChange={handleFileSelect} className="hidden" />
-              </label>
-            </p>
-            <p className="mt-1 text-xs text-omega-dark/40 dark:text-clinical-white/25">PDF, PNG o JPG</p>
-          </div>
-
-          {/* Uploaded files */}
-          {files.length > 0 && (
-            <div className="space-y-2">
-              {files.map((f) => (
-                <div
-                  key={f.id}
-                  className="flex items-center gap-3 rounded-lg border border-omega-violet/15 bg-white px-4 py-3 dark:border-clinical-white/10 dark:bg-omega-surface"
-                >
-                  <FileText size={18} className="shrink-0 text-omega-violet dark:text-beta-mint" />
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium text-omega-dark dark:text-clinical-white">{f.name}</p>
-                    <p className="text-xs text-omega-dark/40 dark:text-clinical-white/30">{f.size} · {f.date}</p>
-                  </div>
-                  <button className="rounded-lg p-1.5 text-omega-violet/60 transition-colors hover:bg-omega-violet/10 hover:text-omega-violet dark:text-beta-mint/60 dark:hover:bg-beta-mint/10 dark:hover:text-beta-mint">
-                    <Download size={16} />
-                  </button>
-                  <button
-                    onClick={() => removeFile(f.id)}
-                    className="rounded-lg p-1.5 text-omega-dark/30 transition-colors hover:bg-alert-red/10 hover:text-alert-red dark:text-clinical-white/30"
-                  >
-                    <Trash2 size={16} />
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* ── Trends section ─────────────────────────────── */}
-      <div className="rounded-xl border border-omega-violet/20 bg-white p-5 dark:border-clinical-white/10 dark:bg-omega-surface">
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-          <h2 className="flex items-center gap-2 text-base font-semibold text-omega-dark dark:text-clinical-white">
-            <TrendingUp size={18} className="text-omega-violet dark:text-beta-mint" />
-            Tendencias — Glucosa (mg/dL)
-          </h2>
-
-          {/* Add value form */}
-          <div className="flex items-center gap-2">
-            <input
-              type="text"
-              value={newFecha}
-              onChange={(e) => setNewFecha(e.target.value)}
-              placeholder="YYYY-MM"
-              className="w-24 rounded-lg border border-omega-violet/20 bg-clinical-white px-2 py-1.5 text-xs text-omega-dark outline-none focus:border-omega-violet/40 dark:border-clinical-white/10 dark:bg-omega-abyss dark:text-clinical-white"
-            />
-            <input
-              type="number"
-              value={newVal}
-              onChange={(e) => setNewVal(e.target.value)}
-              placeholder="Valor"
-              className="w-20 rounded-lg border border-omega-violet/20 bg-clinical-white px-2 py-1.5 text-xs text-omega-dark outline-none focus:border-omega-violet/40 dark:border-clinical-white/10 dark:bg-omega-abyss dark:text-clinical-white"
-            />
-            <button
-              onClick={addTrendPoint}
-              disabled={!newVal || !newFecha}
-              className="flex items-center gap-1 rounded-lg bg-omega-violet px-3 py-1.5 text-xs font-semibold text-clinical-white transition-colors hover:bg-omega-violet/90 disabled:opacity-40"
-            >
-              <Plus size={14} />
-              Agregar
-            </button>
-          </div>
-        </div>
-
-        {/* Chart */}
-        <div className="rounded-lg border border-omega-violet/10 bg-clinical-white p-4 dark:border-clinical-white/5 dark:bg-omega-abyss">
-          <TrendChart data={trendData} />
-        </div>
-
-        {/* Data table below chart */}
-        <div className="mt-4 flex flex-wrap gap-2">
-          {trendData.map((d) => (
-            <span
-              key={d.fecha}
-              className="rounded-full border border-omega-violet/15 bg-omega-violet/5 px-3 py-1 text-xs text-omega-dark dark:border-clinical-white/10 dark:bg-omega-violet/15 dark:text-clinical-white"
-            >
-              {d.fecha}: <strong className="text-beta-mint">{d.valor}</strong> mg/dL
-            </span>
-          ))}
-        </div>
-      </div>
+    <div
+      onDragOver={e => { e.preventDefault(); setDragOver(true) }}
+      onDragLeave={() => setDragOver(false)}
+      onDrop={handleDrop}
+      className={`flex items-center justify-center rounded-lg border-2 border-dashed px-4 py-4 text-center transition-colors ${
+        dragOver
+          ? 'border-beta-mint bg-beta-mint/5'
+          : 'border-clinical-white/10 hover:border-clinical-white/20'
+      }`}
+    >
+      <Upload size={16} className={`mr-2 ${dragOver ? 'text-beta-mint' : 'text-clinical-white/20'}`} />
+      <p className="text-xs text-clinical-white/40">
+        Arrastra archivos o{' '}
+        <label className="cursor-pointer font-semibold text-beta-mint underline">
+          selecciona
+          <input type="file" multiple accept=".pdf,.png,.jpg,.jpeg" onChange={handleSelect} className="hidden" />
+        </label>
+      </p>
     </div>
   )
 }

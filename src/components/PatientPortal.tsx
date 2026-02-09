@@ -38,8 +38,10 @@ import {
   Sparkles,
   MessageCircle,
   Palette,
+  ArrowLeft,
 } from 'lucide-react'
-import { useData, type Appointment } from '../context/DataContext'
+import { useData } from '../context/DataContext'
+import type { AgendaAppointment } from '../types/phase2'
 import { useSettings } from '../context/SettingsContext'
 import { useTheme } from '../context/ThemeContext'
 import {
@@ -349,15 +351,28 @@ function loadHealthData(): PatientHealthData {
   return healthDataDefaults
 }
 
-export default function PatientPortal() {
+export interface PatientPortalProps {
+  doctorPreview?: boolean
+  previewPatient?: {
+    id: number
+    nombre: string
+    email?: string
+    telefono?: string
+  }
+  onBack?: () => void
+}
+
+export default function PatientPortal({ doctorPreview, previewPatient, onBack }: PatientPortalProps = {}) {
   const { user } = useUser()
   const { signOut } = useClerk()
   const { clinic } = useSettings()
-  const { appointments, setAppointments } = useData()
+  const { appointments, addAppointment } = useData()
   const { monochrome, toggleMonochrome } = useTheme()
 
   const healthData = useMemo(() => loadHealthData(), [])
-  const firstName = user?.firstName || 'Paciente'
+  const firstName = doctorPreview && previewPatient
+    ? previewPatient.nombre.split(' ')[0]
+    : (user?.firstName || 'Paciente')
   const [tab, setTab] = useState<Tab>('inicio')
   const [prevTab, setPrevTab] = useState<Tab>('inicio')
   const direction = getDirection(prevTab, tab)
@@ -387,27 +402,49 @@ export default function PatientPortal() {
       <div className="relative flex w-full max-w-md flex-col">
         {/* Header */}
         <header className="relative z-10 flex items-center justify-between border-b border-white/[0.06] bg-omega-abyss/70 px-5 py-3.5 backdrop-blur-xl">
-          <div className="flex items-center gap-2.5">
-            <img src="/beta-logo.png" alt="Beta Life" className="h-7 w-auto object-contain" />
-            <div className="h-4 w-px bg-white/[0.08]" />
-            <span className="text-[10px] font-bold tracking-widest text-white/30">BETA LIFE</span>
-          </div>
-          <div className="flex items-center gap-3">
-            <button
-              onClick={toggleMonochrome}
-              className={`flex h-8 w-8 items-center justify-center rounded-lg transition-all active:scale-90 ${
-                monochrome
-                  ? 'bg-white/10 text-white'
-                  : 'bg-white/[0.04] text-white/40'
-              }`}
-              title={monochrome ? 'Modo Color' : 'Blanco y Negro'}
-            >
-              <Palette size={16} />
-            </button>
-            <p className="text-sm text-white/50">
-              Hola, <span className="font-semibold text-beta-mint">{firstName}</span>
-            </p>
-          </div>
+          {doctorPreview ? (
+            <>
+              <button
+                onClick={onBack}
+                className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm font-medium text-white/60 transition-colors hover:bg-white/[0.06] hover:text-white active:scale-95"
+              >
+                <ArrowLeft size={16} />
+                Volver
+              </button>
+              <div className="flex items-center gap-2">
+                <span className="rounded-full bg-omega-violet/20 px-2.5 py-0.5 text-[10px] font-bold text-omega-violet">
+                  Vista Doctor
+                </span>
+                <p className="text-sm text-white/50">
+                  <span className="font-semibold text-beta-mint">{firstName}</span>
+                </p>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="flex items-center gap-2.5">
+                <img src="/beta-logo.png" alt="Beta Life" className="h-7 w-auto object-contain" />
+                <div className="h-4 w-px bg-white/[0.08]" />
+                <span className="text-[10px] font-bold tracking-widest text-white/30">BETA LIFE</span>
+              </div>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={toggleMonochrome}
+                  className={`flex h-8 w-8 items-center justify-center rounded-lg transition-all active:scale-90 ${
+                    monochrome
+                      ? 'bg-white/10 text-white'
+                      : 'bg-white/[0.04] text-white/40'
+                  }`}
+                  title={monochrome ? 'Modo Color' : 'Blanco y Negro'}
+                >
+                  <Palette size={16} />
+                </button>
+                <p className="text-sm text-white/50">
+                  Hola, <span className="font-semibold text-beta-mint">{firstName}</span>
+                </p>
+              </div>
+            </>
+          )}
         </header>
 
         {/* Content area */}
@@ -435,11 +472,22 @@ export default function PatientPortal() {
               {tab === 'citas' && (
                 <TabCitas
                   appointments={appointments}
-                  setAppointments={setAppointments}
-                  userName={user?.fullName || user?.firstName || 'Paciente Portal'}
+                  addAppointment={addAppointment}
+                  userName={doctorPreview && previewPatient ? previewPatient.nombre : (user?.fullName || user?.firstName || 'Paciente Portal')}
+                  doctorPreview={doctorPreview}
+                  previewPatientId={previewPatient?.id}
                 />
               )}
-              {tab === 'perfil' && <TabPerfil user={user} signOut={signOut} healthData={healthData} />}
+              {tab === 'perfil' && (
+                <TabPerfil
+                  user={user}
+                  signOut={signOut}
+                  healthData={healthData}
+                  doctorPreview={doctorPreview}
+                  previewPatientName={previewPatient?.nombre}
+                  previewPatientEmail={previewPatient?.email}
+                />
+              )}
             </motion.div>
           </AnimatePresence>
         </main>
@@ -902,26 +950,34 @@ function TabSalud({ clinic }: { clinic: { nombre: string; nit: string; telefono:
 
 function TabCitas({
   appointments,
-  setAppointments,
+  addAppointment,
   userName,
+  doctorPreview,
+  previewPatientId,
 }: {
-  appointments: Appointment[]
-  setAppointments: React.Dispatch<React.SetStateAction<Appointment[]>>
+  appointments: AgendaAppointment[]
+  addAppointment: (data: Omit<AgendaAppointment, 'id' | 'createdAt' | 'updatedAt'>) => void
   userName: string
+  doctorPreview?: boolean
+  previewPatientId?: number
 }) {
   const [showBooking, setShowBooking] = useState(false)
 
-  const myAppointments = appointments.filter((a) =>
-    a.patient.toLowerCase().includes('paciente') ||
-    a.patient === userName ||
-    a.status === 'Confirmada' ||
-    a.status === 'Pendiente',
-  )
+  const myAppointments = doctorPreview && previewPatientId
+    ? appointments.filter((a) => a.patientId === previewPatientId)
+    : appointments.filter((a) =>
+        a.patientName.toLowerCase().includes('paciente') ||
+        a.patientName === userName ||
+        a.estado === 'confirmada' ||
+        a.estado === 'pendiente',
+      )
 
   const statusColor: Record<string, string> = {
-    Confirmada: 'bg-emerald-500/15 text-emerald-400',
-    Pendiente: 'bg-amber-500/15 text-amber-400',
-    Cancelada: 'bg-red-500/15 text-red-400',
+    confirmada: 'bg-emerald-500/15 text-emerald-400',
+    pendiente: 'bg-amber-500/15 text-amber-400',
+    cancelada: 'bg-red-500/15 text-red-400',
+    completada: 'bg-blue-500/15 text-blue-400',
+    no_show: 'bg-slate-500/15 text-slate-400',
   }
 
   return (
@@ -934,9 +990,9 @@ function TabCitas({
       </motion.div>
 
       {/* Booking wizard */}
-      {showBooking && (
+      {!doctorPreview && showBooking && (
         <PortalBookingWizard
-          setAppointments={setAppointments}
+          addAppointment={addAppointment}
           userName={userName}
           onClose={() => setShowBooking(false)}
         />
@@ -952,9 +1008,9 @@ function TabCitas({
                 <p className="mt-2 text-sm text-white/40">No tienes citas registradas</p>
               </div>
             )}
-            {myAppointments.map((a, i) => (
+            {myAppointments.map((a) => (
               <div
-                key={i}
+                key={a.id}
                 className="flex items-center gap-3 rounded-2xl border border-white/[0.06] bg-white/[0.03] p-3.5 backdrop-blur-sm"
               >
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-beta-mint/15">
@@ -965,14 +1021,14 @@ function TabCitas({
                   <div className="mt-0.5 flex items-center gap-2 text-[11px] text-white/40">
                     <span className="flex items-center gap-1">
                       <Clock size={10} />
-                      {a.time}
+                      {a.hora}
                     </span>
                     <span>·</span>
-                    <span>{a.patient}</span>
+                    <span>{a.patientName}</span>
                   </div>
                 </div>
-                <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold ${statusColor[a.status] ?? 'bg-white/[0.05] text-white/30'}`}>
-                  {a.status}
+                <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold ${statusColor[a.estado] ?? 'bg-white/[0.05] text-white/30'}`}>
+                  {a.estado}
                 </span>
               </div>
             ))}
@@ -992,7 +1048,7 @@ function TabCitas({
       )}
 
       {/* FAB */}
-      {!showBooking && (
+      {!doctorPreview && !showBooking && (
         <button
           onClick={() => setShowBooking(true)}
           className="fixed bottom-20 right-1/2 z-10 flex h-14 w-14 translate-x-[calc(min(256px,50vw)-2rem)] items-center justify-center rounded-full bg-beta-mint shadow-[0_0_20px_rgba(127,255,212,0.25)] transition-all active:scale-95"
@@ -1007,11 +1063,11 @@ function TabCitas({
 /* ── Portal Booking Wizard (3-step, specialty-based) ───── */
 
 function PortalBookingWizard({
-  setAppointments,
+  addAppointment,
   userName,
   onClose,
 }: {
-  setAppointments: React.Dispatch<React.SetStateAction<Appointment[]>>
+  addAppointment: (data: Omit<AgendaAppointment, 'id' | 'createdAt' | 'updatedAt'>) => void
   userName: string
   onClose: () => void
 }) {
@@ -1036,15 +1092,16 @@ function PortalBookingWizard({
   function handleConfirm() {
     if (!selectedSpecialty || !selectedDate || !selectedTime) return
 
-    setAppointments((prev) => [
-      ...prev,
-      {
-        patient: userName,
-        time: selectedTime,
-        doctor: selectedSpecialty.doctor,
-        status: 'Pendiente',
-      },
-    ])
+    addAppointment({
+      patientId: 0,
+      patientName: userName,
+      fecha: selectedDate,
+      hora: selectedTime,
+      duracion: 30,
+      tipo: 'consulta',
+      doctor: selectedSpecialty.doctor,
+      estado: 'pendiente',
+    })
 
     setShowSuccess(true)
     toast.success('Cita agendada exitosamente')
@@ -1398,15 +1455,26 @@ function TabPerfil({
   user,
   signOut,
   healthData,
+  doctorPreview,
+  previewPatientName,
+  previewPatientEmail,
 }: {
   user: ReturnType<typeof useUser>['user']
   signOut: ReturnType<typeof useClerk>['signOut']
   healthData: PatientHealthData
+  doctorPreview?: boolean
+  previewPatientName?: string
+  previewPatientEmail?: string
 }) {
-  const patientId = user?.id ?? 'UNKNOWN'
-  const initials = user
-    ? (user.firstName?.[0] ?? '') + (user.lastName?.[0] ?? '')
-    : '?'
+  const patientId = doctorPreview ? 'PREVIEW' : (user?.id ?? 'UNKNOWN')
+  const displayName = doctorPreview && previewPatientName ? previewPatientName : (user?.fullName || 'Paciente')
+  const displayEmail = doctorPreview ? (previewPatientEmail || '') : (user?.primaryEmailAddress?.emailAddress || '')
+  const nameParts = displayName.split(' ')
+  const initials = doctorPreview
+    ? (nameParts[0]?.[0] ?? '') + (nameParts[1]?.[0] ?? '')
+    : user
+      ? (user.firstName?.[0] ?? '') + (user.lastName?.[0] ?? '')
+      : '?'
 
   const healthCards = [
     { icon: Droplets, label: 'Tipo de Sangre', value: healthData.tipoSangre, color: 'text-red-400 bg-red-400/15' },
@@ -1437,7 +1505,7 @@ function TabPerfil({
 
         <div className="relative p-4 space-y-3">
           <div className="flex items-center gap-3">
-            {user?.imageUrl ? (
+            {!doctorPreview && user?.imageUrl ? (
               <img
                 src={user.imageUrl}
                 alt={user.fullName ?? ''}
@@ -1450,10 +1518,10 @@ function TabPerfil({
             )}
             <div>
               <h1 className="text-base font-bold text-white">
-                {user?.fullName || 'Paciente'}
+                {displayName}
               </h1>
               <p className="text-[11px] text-white/40">
-                {user?.primaryEmailAddress?.emailAddress}
+                {displayEmail}
               </p>
             </div>
           </div>
@@ -1525,21 +1593,23 @@ function TabPerfil({
       </motion.div>
 
       {/* ── Account ────────────────────────────────────── */}
-      <motion.div variants={fadeUp} custom={5}>
-        <h3 className="mb-2 text-[11px] font-bold uppercase tracking-wider text-white/30">
-          Cuenta
-        </h3>
-        <div className="overflow-hidden rounded-2xl border border-white/[0.06] bg-white/[0.03]">
-          <button
-            onClick={() => signOut({ redirectUrl: '/' })}
-            className="flex w-full items-center gap-3 px-4 py-3.5 text-left transition-colors active:bg-white/[0.08]"
-          >
-            <LogOut size={18} className="text-red-400" />
-            <span className="flex-1 text-sm font-medium text-red-400">Cerrar Sesión</span>
-            <ChevronRight size={16} className="text-white/20" />
-          </button>
-        </div>
-      </motion.div>
+      {!doctorPreview && (
+        <motion.div variants={fadeUp} custom={5}>
+          <h3 className="mb-2 text-[11px] font-bold uppercase tracking-wider text-white/30">
+            Cuenta
+          </h3>
+          <div className="overflow-hidden rounded-2xl border border-white/[0.06] bg-white/[0.03]">
+            <button
+              onClick={() => signOut({ redirectUrl: '/' })}
+              className="flex w-full items-center gap-3 px-4 py-3.5 text-left transition-colors active:bg-white/[0.08]"
+            >
+              <LogOut size={18} className="text-red-400" />
+              <span className="flex-1 text-sm font-medium text-red-400">Cerrar Sesión</span>
+              <ChevronRight size={16} className="text-white/20" />
+            </button>
+          </div>
+        </motion.div>
+      )}
     </motion.div>
   )
 }

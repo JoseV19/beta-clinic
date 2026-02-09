@@ -1,9 +1,11 @@
+import { useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { TrendingUp, Syringe, Check } from 'lucide-react'
+import { TrendingUp, Syringe, Check, ChevronDown } from 'lucide-react'
 import GrowthChart from '../../components/pediatrics/GrowthChart'
+import { useData } from '../../context/DataContext'
 import { usePersistentState } from '../../hooks/usePersistentState'
 
-/* ── Vaccination schedule (Colombia PAI) ───────────── */
+/* ── Vaccination schedule (Guatemala PAI) ────────────── */
 
 const VACCINATION_SCHEDULE = [
   {
@@ -81,10 +83,18 @@ type Tab = 'crecimiento' | 'vacunacion'
 export default function PediatricDashboard() {
   const location = useLocation()
   const navigate = useNavigate()
+  const { patients } = useData()
   const tab: Tab = location.pathname === '/vacunacion' ? 'vacunacion' : 'crecimiento'
 
+  const [selectedPatientId, setSelectedPatientId] = useState(0)
+  const selectedPatient = patients.find(p => p.id === selectedPatientId)
+
+  const vaccineKey = selectedPatientId > 0
+    ? `beta_vaccines_${selectedPatientId}`
+    : 'beta_vaccines'
+
   const [applied, setApplied] = usePersistentState<Record<string, boolean>>(
-    'beta_vaccines',
+    vaccineKey,
     {},
   )
 
@@ -92,6 +102,8 @@ export default function PediatricDashboard() {
     setApplied(prev => ({ ...prev, [id]: !prev[id] }))
 
   const appliedCount = Object.values(applied).filter(Boolean).length
+
+  const inputCls = 'w-full rounded-lg border border-clinical-white/10 bg-omega-abyss px-3 py-2 text-sm text-clinical-white outline-none placeholder:text-clinical-white/30 focus:border-beta-mint/30 focus:ring-2 focus:ring-beta-mint/10 appearance-none'
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
@@ -103,6 +115,35 @@ export default function PediatricDashboard() {
         <p className="mt-0.5 text-sm text-omega-dark/50 dark:text-clinical-white/40">
           Seguimiento de crecimiento y esquema de vacunación
         </p>
+      </div>
+
+      {/* Patient selector */}
+      <div className="rounded-xl border border-omega-violet/20 bg-white p-4 dark:border-clinical-white/10 dark:bg-omega-surface">
+        <label className="mb-1 block text-xs font-medium text-omega-dark/50 dark:text-clinical-white/50">
+          Paciente
+        </label>
+        <div className="relative">
+          <select
+            value={selectedPatientId}
+            onChange={e => setSelectedPatientId(Number(e.target.value))}
+            className={inputCls}
+          >
+            <option value={0}>Seleccionar paciente...</option>
+            {patients.map(p => (
+              <option key={p.id} value={p.id}>{p.nombre}</option>
+            ))}
+          </select>
+          <ChevronDown
+            size={14}
+            className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-clinical-white/30"
+          />
+        </div>
+        {selectedPatient && (
+          <p className="mt-2 text-xs text-omega-dark/40 dark:text-clinical-white/30">
+            {selectedPatient.edad} · {selectedPatient.genero}
+            {selectedPatient.fechaNacimiento && ` · Nac. ${new Date(selectedPatient.fechaNacimiento).toLocaleDateString('es-GT')}`}
+          </p>
+        )}
       </div>
 
       {/* Tabs */}
@@ -134,7 +175,10 @@ export default function PediatricDashboard() {
       {/* ── Tab: Crecimiento ─────────────────────────── */}
       {tab === 'crecimiento' && (
         <div className="rounded-xl border border-omega-violet/20 bg-white p-6 dark:border-clinical-white/10 dark:bg-omega-surface">
-          <GrowthChart />
+          <GrowthChart
+            patientId={selectedPatientId}
+            patientBirthDate={selectedPatient?.fechaNacimiento}
+          />
         </div>
       )}
 
@@ -146,6 +190,9 @@ export default function PediatricDashboard() {
             <div className="mb-2 flex items-center justify-between text-sm">
               <span className="font-medium text-omega-dark dark:text-clinical-white">
                 Progreso de vacunación
+                {selectedPatient && (
+                  <span className="ml-2 text-beta-mint">— {selectedPatient.nombre}</span>
+                )}
               </span>
               <span className="text-beta-mint">
                 {appliedCount} / {TOTAL_VACCINES} aplicadas

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
 import { motion, AnimatePresence } from 'framer-motion'
 import { toast } from 'sonner'
 import {
@@ -14,19 +15,9 @@ import {
   Loader2,
 } from 'lucide-react'
 import type { Patient } from '../data/patients'
+import { patientSchema, type PatientFormValues } from '../schemas'
 
-/* ── Types ────────────────────────────────────────────── */
-
-interface FormValues {
-  nombre: string
-  documento: string
-  fechaNacimiento: string
-  genero: 'M' | 'F'
-  telefono: string
-  email: string
-  antecedentes: string
-  estado: 'activo' | 'inactivo'
-}
+type FormValues = PatientFormValues
 
 interface Props {
   patient: Patient
@@ -55,6 +46,7 @@ export default function EditPatientModal({
     reset,
     formState: { errors, isDirty },
   } = useForm<FormValues>({
+    resolver: zodResolver(patientSchema),
     defaultValues: patientToForm(patient),
   })
 
